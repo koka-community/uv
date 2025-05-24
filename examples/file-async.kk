@@ -1,11 +1,3 @@
-/*----------------------------------------------------------------------------
-   Copyright 2024, Koka-Community Authors
-
-   Licensed under the MIT License ("The License"). You may not
-   use this file except in compliance with the License. A copy of the License
-   can be found in the LICENSE file at the root of this distribution.
-----------------------------------------------------------------------------*/
-
 import std/os/file-async
 import std/os/path
 import std/async
@@ -15,6 +7,15 @@ fun main()
   "---------".println
   val res = read-as-string("stack.yaml".path)
   res.println
+  "---------".println
+  "Done!".println
+  "Stream from file".println
+  var done := False
+  val s = stream("stack.yaml".path, chunkSize=20.int32) // Small to really test this
+  while {!done} 
+    match s.receive
+      Error(Exception("EOF", ExnInternal("EOF"))) -> done := True
+      Ok(bytes) -> bytes.string.print
   "---------".println
   "Done!".println
   "Write file".println
