@@ -5,13 +5,13 @@ import std/async
 fun main()
   "Read file".println
   "---------".println
-  val res = read-as-string("stack.yaml".path)
+  val res = read-as-string("examples/file-async.kk".path)
   res.println
   "---------".println
   "Done!".println
   "Stream from file".println
   var done := False
-  val s = stream("stack.yaml".path, chunkSize=20.int32) // Small to really test this
+  val s = stream("examples/file-async.kk".path, chunkSize=20.int32) // Small to really test this
   while {!done} 
     match s.receive
       Error(Exception("EOF", ExnInternal("EOF"))) -> done := True
@@ -20,7 +20,8 @@ fun main()
   "Done!".println
   "Write file".println
   "---------".println
-  val file = open("scratch/test.txt".path, o_RDWR.or(o_CREAT), s_IRWXU)
+  create-dir("scratch".path, s_IRWXU)
+  with file = open("scratch/test.txt".path, o_RDWR.or(o_CREAT), s_IRWXU)
   write-to-file(file, "Hello, world!")
   "---------".println
   "Done!".println
