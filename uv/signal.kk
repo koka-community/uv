@@ -41,6 +41,16 @@ pub val sSIGINT = ssSIGINT()
 extern ssSIGINT(): int32
   c inline "SIGINT"
 
+// The sigquit signal
+pub val sSIGQUIT = ssSIGQUIT()
+extern ssSIGQUIT(): int32
+  c inline "SIGQUIT"
+
+// The sigkill signal
+pub val sSIGKILL = ssSIGKILL()
+extern ssSIGKILL(): int32
+  c inline "SIGKILL"
+
 // Start watching for the given signal, calling the callback on the next event loop
 pub fun signal-start(signal: int32, cb: (uv-signal) -> io-noexn ()): io-noexn uv-status-code
   uv-signal-start(uv-signal-init(), cb, signal).status-code
