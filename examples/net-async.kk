@@ -15,15 +15,19 @@ fun handleConnections(connections)
     _ -> throw("Error accepting connection")
 
 fun main()
-  val str = "GET / HTTP/1.1\r\n\r\n"
-  val server = tcp()
-  server.bind("0.0.0.0", 8000)
-  val connections = server.listen
-  interleaved({while({True}, {handleConnections(connections)})}) fn()
-    val stream = tcp().connect("127.0.0.1", 8000)
-    stream.write(str.bytes)
-    val buf = stream.read
-    buf.string.println
-    server.shutdown()
-    stream.shutdown() // also closes the tcp client handle
-  println("Done")
+  with default-event-loop
+  with @default-async
+  with err <- try
+    val str = "GET / HTTP/1.1\r\n\r\n"
+    val server = tcp()
+    server.bind("0.0.0.0", 8000)
+    val connections = server.listen
+    interleaved({while({True}, {handleConnections(connections)})}) fn()
+      val stream = tcp().connect("127.0.0.1", 8000)
+      stream.write(str.bytes)
+      val buf = stream.read
+      buf.string.println
+      server.shutdown()
+      stream.shutdown() // also closes the tcp client handle
+    println("Done")
+  err.println

@@ -23,24 +23,23 @@ fun main()
   //       readFileX(fd, 0, ref(""))
   //     _ -> ()
   // Sync API Example
-  val stackerr = open-sync("stack.yaml", o_RDONLY, 0.int32)
-  match stackerr
-    Ok(stack) ->
-      val reserr = stack.read-sync(2048.int32)
+  match open-sync("../uv/examples/file-basic.kk", o_RDONLY, 0.int32)
+    Ok(file) ->
+      val reserr = file.read-sync(2048.int32)
       match reserr
         Ok((bytes, _)) ->
-          println("Got fd sync " ++ stack.internal.int.show ++ "\n")
+          println("Got fd sync " ++ file.internal.int.show ++ "\n")
           println(bytes.string)
           println("\n\nDone!")
         _ -> ()
     _ -> ()
-  val dir = mkdir-sync("scratch/test", s_IRWXU)
-  val dir2 = mkdtemp-sync("scratch/test/tmpXXXXXX")
+  val dir = mkdir-sync("../uv/scratch/test", s_IRWXU)
+  val dir2 = mkdtemp-sync("../uv/scratch/test/tmpXXXXXX")
   match dir2
     Ok(d) ->
       println("Created dir " ++ d ++ "\n")
       val tmpf = mkstemp-sync(d ++ "/tmpXXXXXX")
-      val tmpfile = open-sync("scratch/test/tmpfile.txt", o_CREAT.or(o_RDWR), s_IRWXU)
+      val tmpfile = open-sync("../uv/scratch/test/tmpfile.txt", o_CREAT.or(o_RDWR), s_IRWXU)
       match tmpfile
         Ok(f) ->
           println("Created tmp file\n")
@@ -61,11 +60,11 @@ fun main()
       rmdir-sync(d)
       ()
     _ -> ()
-  val x = stat-sync("stack.yaml")
+  val x = stat-sync("../uv/examples/file-basic.kk")
   match x
     Ok(s) -> println(s.show)
     Error(e) -> throw-exn(e)
-  rename-sync("scratch/test.kk", "scratch/test2.kk")
-  copyfile-sync("scratch/test2.kk", "scratch/test.kk", uv_fs_COPYFILE_EXCL)
-  unlink-sync("scratch/test2.kk")
+  rename-sync("../uv/scratch/test.kk", "../uv/scratch/test2.kk")
+  copyfile-sync("../uv/scratch/test2.kk", "../uv/scratch/test.kk", uv_fs_COPYFILE_EXCL)
+  unlink-sync("../uv/scratch/test2.kk")
   ()

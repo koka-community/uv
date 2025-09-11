@@ -218,7 +218,7 @@ pub fun open(path: string, flags: int32, cb: (error<uv-file>) -> io-noexn (), mo
 // Equivalent to preadv(2). If the offset argument is -1, then the current file offset is used and updated.
 // WARNING: On Windows, under non-MSVC environments (e.g. when GCC or Clang is used to build libuv), files opened using UV_FS_O_FILEMAP may cause a fatal crash if the memory mapped read operation fails.
 pub fun uv/read(file: uv-file, length: int32, offset: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
-  uv/read-buf(file, alloc(length.ssize_t), offset, cb)
+  uv/read-buf(file, alloc(length.int.ssize_t), offset, cb)
 
 pub extern uv/read-buf(file: uv-file, bytes: bytes, offset: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
   c "kk_uv_fs_read"
@@ -237,7 +237,7 @@ pub fun basic/read(file: uv-file, length: int32, cb: (error<(bytes, int)>) -> io
 //      uv/read-buf(file, length, offset, alloc(length), cb)
 
 pub fun uv/read-sync(file: uv-file, length: int32, offset: int32): io-noexn error<(bytes, int)>
-  uv/readbuf-sync(file, alloc(length.ssize_t), offset)
+  uv/readbuf-sync(file, alloc(length.int.ssize_t), offset)
 
 pub extern uv/readbuf-sync(file: uv-file, bytes: bytes, offset: int32): io-noexn error<(bytes, int)>
   c "kk_uv_fs_read_sync"
