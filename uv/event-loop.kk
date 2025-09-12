@@ -12,6 +12,7 @@ pub import std/time/duration
 pub import std/time/timestamp
 pub import uv/utils
 pub import uv/timer
+pub import std/async/async
 import std/num/int32
 
 extern import
@@ -32,6 +33,15 @@ pub extern clear-timeout( tid : any) : io-noexn ()
   cs "_Async.ClearTimeout"
   js "clearTimeout"
   c "kk_clear_timeout"
+
+// Runs an async action on the default uv event loop, and exceptions at the top level exit the async loop.
+pub fun default-async-uv(action: () -> <async,io> a): io a
+  val result = ref(Error(Exception("Unreachable", ExnInternal("Unreachable"))))
+  val _ =
+    with default-event-loop
+    with @default-async
+    result := try(action)
+  (!result).untry
 
 // Handles a uv loop
 pub fun default-event-loop(action)

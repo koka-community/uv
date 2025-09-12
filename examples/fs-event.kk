@@ -4,9 +4,7 @@ import std/async
 
 val scratch = "scratch"
 fun main()
-  with default-event-loop
-  with @default-async
-  with err <- try
+  default-async-uv
     val event = uv-fs-event-init().untry
     event.uv-fs-event-start(scratch, []) fn (res)
       match res
@@ -17,4 +15,3 @@ fun main()
           err.show.trace
     wait(5.seconds)
     event.uv-fs-event-stop().untry
-  err.println

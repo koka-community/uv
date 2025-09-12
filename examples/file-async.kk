@@ -3,9 +3,7 @@ import std/os/path
 import std/async/async
 
 fun main()
-  with default-event-loop
-  with @default-async
-  with err <- try
+  default-async-uv
     "Read file".println
     "---------".println
     val res = read-as-string("../uv/examples/file-async.kk".path)
@@ -28,5 +26,4 @@ fun main()
     write-to-file(file, "Hello, world!")
     "---------".println
     "Done!".println
-  err.println
   

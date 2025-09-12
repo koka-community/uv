@@ -3,9 +3,7 @@ import uv/event-loop
 import std/async
 
 fun main()
-  with default-event-loop
-  with @default-async
-  with err <- try
+  default-async-uv
     val poll = uv-fs-poll-init().untry
     poll.uv-fs-poll-start("../uv/scratch/test.kk", 1000) fn (res)
       match res
@@ -17,4 +15,3 @@ fun main()
     wait(5.seconds)
     poll.uv-fs-poll-stop()
     ()
-  err.println

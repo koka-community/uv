@@ -15,9 +15,7 @@ fun handleConnections(connections)
     _ -> throw("Error accepting connection")
 
 fun main()
-  with default-event-loop
-  with @default-async
-  with err <- try
+  default-async-uv
     val str = "GET / HTTP/1.1\r\n\r\n"
     val server = tcp()
     server.bind("0.0.0.0", 8000)
@@ -30,4 +28,3 @@ fun main()
       server.shutdown()
       stream.shutdown() // also closes the tcp client handle
     println("Done")
-  err.println
