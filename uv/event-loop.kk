@@ -67,7 +67,7 @@ extern run-loop(): io-noexn ()
   js inline ""
   cs inline ""
 
-// Initilizes a uv loop
+// Initializes a uv loop
 extern init-loop(): io-noexn ()
   c "kk_async_loop_init"
   js inline ""

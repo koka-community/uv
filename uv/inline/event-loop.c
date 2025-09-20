@@ -65,12 +65,15 @@ void kk_uv_loop_run(kk_context_t* _ctx){
   // Run the event loop after the initial startup of the program
   int ret = uv_run(uvloop(), UV_RUN_DEFAULT);
   if (ret != 0){
-    kk_warning_message("Event loop closed with status %s", uv_err_name(ret));
+    kk_warning_message("Event loop closed with status %s\n", uv_err_name(ret));
   }
 }
 
 static void kk_uv_loop_close(kk_context_t* _ctx) {
-  uv_loop_close(uvloop());
+  int ret = uv_loop_close(uvloop());
+  if (ret != 0) {
+    kk_warning_message("Event loop closed %s\n", uv_err_name(ret));
+  }
   kk_free(uvloop(), _ctx);
 }
 

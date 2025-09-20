@@ -96,10 +96,18 @@ kk_uv_timer__timer kk_uv_timer_init(kk_context_t* _ctx) {
   return kk_uv_to_tm(t);
 }
 
+// void kk_timer_close_cb(uv_handle_t* handle) {
+//   kk_uv_hnd_get_callback((uv_timer_t*)uv_timer, hnd, callback)
+//   kk_box_drop(hnd, kk_context());
+//   uv_timer->data = NULL;
+//   uv_close(uv_timer, NULL);
+// }
+
 kk_unit_t kk_uv_timer_stop(kk_uv_timer__timer timer, kk_context_t* _ctx) {
   uv_timer_t* uv_timer = kk_tm_to_uv(timer);
   uv_timer_stop(uv_timer);
-  kk_box_drop(timer.internal, _ctx);
+  uv_close(uv_timer, NULL);
+  // kk_box_drop(timer.internal, _ctx); // The timer will be freed by libuv after processing the close.
   return kk_Unit;
 }
 
@@ -107,9 +115,10 @@ void kk_uv_timer_unit_callback(uv_timer_t* uv_timer) {
   kk_uv_hnd_get_callback(uv_timer, hnd, callback)
   if (uv_timer_get_repeat(uv_timer) == 0) {
     kk_unit_callback(callback)
+    // kk_box_drop(hnd, kk_context());
   } else {
-    kk_function_dup(callback, _ctx);
-    kk_box_dup(hnd, _ctx);
+    kk_function_dup(callback, kk_context());
+    kk_box_dup(hnd, kk_context());
     kk_unit_callback(callback)
   }
 }

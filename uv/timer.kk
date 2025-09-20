@@ -32,7 +32,7 @@ pub extern timer-init(): io-noexn timer
 // If repeat is non-zero, the callback fires first after timeout milliseconds and then repeatedly after repeat milliseconds.
 pub extern timer-start(^t: timer, timeout: int64, repeat: int64, cb: () -> io-noexn ()): io-noexn error<()>
   c  "kk_timer_start"
-  js inline "_start_timer(#1,#2,#3,#4)"
+  js inline "_start_timer(#1,#2,#3,#4)" 
   cs inline ""
 
 pub extern timer-stop(t: timer): io-noexn ()
