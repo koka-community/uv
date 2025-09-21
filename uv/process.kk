@@ -10,6 +10,8 @@
 module uv/process
 
 import uv/utils
+import uv/stream
+import uv/event-loop
 import std/num/int32
 import std/num/int64
 
@@ -26,8 +28,8 @@ pub struct uv-command
 
 pub type stdio-stream
   Stream-ignore
-  // stream-mkpipe // TODO
   Stream-fd(fd: int32)
+  Stream-uv(value: uv-stream)
 
 // pub fun pipe-stdout(pipe): child-output
 //   Split(Output-to(pipe), Inerhit-output-stream)
@@ -42,7 +44,7 @@ pub fun spawn(command: uv-command, on-complete: uv-exit-cb): io uv-process
   // https://docs.libuv.org/en/v1.x/process.html
   // Command line arguments. args[0] should be the path to the program.
   val raw-cmd = command(args = Cons(command.file, command.args))
-  untry(spawn-c(raw-cmd, on-complete))
+  spawn-c(raw-cmd, on-complete).untry
 
 extern spawn-c(
   command: uv-command,
@@ -58,3 +60,6 @@ pub fun signal(^process: uv-process, signal: int32): exn ()
 
 extern try-signal(^process: uv-process, signal: int32): error<()>
   c "kk_uv_proc_signal"
+
+pub extern mkpipe(): error<(uv-stream, uv-stream)>
+  c "kk_uv_proc_pipe"

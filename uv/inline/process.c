@@ -23,7 +23,7 @@ char* kk_string_cstr_alloc(kk_string_t str, kk_context_t* _ctx) {
 // TODO: move into utils?
 // Helper function to convert Koka list<string> to null-terminated C char** array.
 static char** kk_list_string_to_nt_carray_borrow(kk_std_core_types__list list, kk_context_t* _ctx) {
-  kk_std_core_types__list_dup(list, _ctx);
+  list = kk_std_core_types__list_dup(list, _ctx);
   kk_integer_t klist_len = kk_std_core_list_length(list, _ctx);
   int list_len = kk_integer_clamp32(klist_len, _ctx);
 
@@ -85,6 +85,11 @@ static uv_stdio_container_t kk_convert_to_stdio_container(
     result.flags = UV_INHERIT_FD;
     struct kk_uv_process_Stream_fd* stream_fd = kk_uv_process__as_Stream_fd(stream, _ctx);
     result.data.fd = stream_fd->fd;
+  } else if (kk_uv_process_is_stream_uv(stream, _ctx)) {
+    result.flags = UV_INHERIT_STREAM;
+    struct kk_uv_process_Stream_uv* stream_uv = kk_uv_process__as_Stream_uv(stream, _ctx);
+    // TODO: do we need to dup this stream?
+    result.data.stream = kk_owned_handle_to_uv_handle(uv_stream_t, stream_uv->value);
   } else {
     kk_fatal_error(EINVAL, "unknown stream type\n");
   }
@@ -153,4 +158,38 @@ static kk_std_core_exn__error kk_uv_proc_signal(kk_uv_process__uv_process proces
   kk_uv_process_wrapper_t* wrapper = kk_unbox_process_borrowed(process);
   int status = uv_process_kill(&wrapper->process, kk_signal);
   kk_uv_check_return(status, kk_unit_box(kk_Unit));
+}
+
+static kk_std_core_exn__error kk_uv_proc_pipe(kk_context_t* _ctx) {
+  uv_file files[2];
+  int status = uv_pipe(files, 0, 0);
+  kk_uv_check_bail(status);
+
+  uv_pipe_t readable;
+  status = uv_pipe_init(uvloop(), &readable, 0);
+  kk_uv_check_bail(status);
+
+  status = uv_pipe_open(&readable, files[0]);
+  kk_uv_check_bail(status);
+
+  uv_pipe_t writable;
+  status = uv_pipe_init(uvloop(), &writable, 0);
+  kk_uv_check_bail(status);
+
+  status = uv_pipe_open(&writable, files[1]);
+  kk_uv_check_bail(status);
+
+  // everything has succeeded, do the mallocs and return
+  uv_pipe_t* readable_p = kk_malloc(sizeof(uv_pipe_t), _ctx);
+  memcpy(readable_p, &readable, sizeof(uv_pipe_t));
+
+  uv_pipe_t* writable_p = kk_malloc(sizeof(uv_pipe_t), _ctx);
+  memcpy(writable_p, &writable, sizeof(uv_pipe_t));
+
+  kk_std_core_types__tuple2 result = kk_std_core_types__new_Tuple2(
+    uv_handle_to_owned_kk_handle_box(readable_p, kk_handle_free, stream, stream),
+    uv_handle_to_owned_kk_handle_box(writable_p, kk_handle_free, stream, stream),
+    _ctx);
+
+  return kk_std_core_exn__new_Ok(kk_std_core_types__tuple2_box(result, _ctx), _ctx);
 }

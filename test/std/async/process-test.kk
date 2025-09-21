@@ -51,3 +51,9 @@ fun suite()
         throw(errmsg)
     expect-process-finished(process.unjust)
     wait(0.2)
+
+  effectful-test("capture output")
+    expect("echo 1 2 words with     many spaces\n") {
+      val c = command("echo", ["1", "2", "words with     many spaces"], output=capture-stdout)
+      c.run(fn(p) p.output)
+    }
