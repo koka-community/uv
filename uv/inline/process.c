@@ -88,7 +88,6 @@ static uv_stdio_container_t kk_convert_to_stdio_container(
   } else if (kk_uv_process_is_stream_uv(stream, _ctx)) {
     result.flags = UV_INHERIT_STREAM;
     struct kk_uv_process_Stream_uv* stream_uv = kk_uv_process__as_Stream_uv(stream, _ctx);
-    // TODO: do we need to dup this stream?
     result.data.stream = kk_owned_handle_to_uv_handle(uv_stream_t, stream_uv->value);
   } else {
     kk_fatal_error(EINVAL, "unknown stream type\n");
@@ -187,8 +186,8 @@ static kk_std_core_exn__error kk_uv_proc_pipe(kk_context_t* _ctx) {
   memcpy(writable_p, &writable, sizeof(uv_pipe_t));
 
   kk_std_core_types__tuple2 result = kk_std_core_types__new_Tuple2(
-    uv_handle_to_owned_kk_handle_box(readable_p, kk_handle_free, stream, stream),
-    uv_handle_to_owned_kk_handle_box(writable_p, kk_handle_free, stream, stream),
+    uv_handle_to_owned_kk_handle_box(readable_p, kk_free_fun, stream, stream),
+    uv_handle_to_owned_kk_handle_box(writable_p, kk_free_fun, stream, stream),
     _ctx);
 
   return kk_std_core_exn__new_Ok(kk_std_core_types__tuple2_box(result, _ctx), _ctx);

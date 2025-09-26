@@ -216,9 +216,10 @@ pub fun run(
     // (which the success path will wait for)
     finalize-process(process, kill-strategy)
 
+  println("TODO: close half of pipe belonging to child...")
   // close the half of any pipes that are only used by the child
-  close-owned(uv-stdout)
-  close-owned(uv-stderr)
+  // close-owned(uv-stdout)
+  // close-owned(uv-stderr)
 
   val result = action(process)
 
@@ -230,8 +231,7 @@ pub fun run(
 
 fun close-owned(stream: stdio-stream): asyncx ()
   match stream
-    Stream-uv(s) ->
-      s.close()
+    Stream-uv(s) -> s.close()
     _ -> ()
 
 pub fun await(process: process): <io,async> exit

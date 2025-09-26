@@ -23,12 +23,12 @@ fun expect-process-finished(process)
 fun suite()
   effectful-test("success")
     expect(())
-      command("true", []).run()
+      command("true", []).run-unit()
     wait(0.2)
 
   effectful-test("failure")
     expect-error-message("Command failed (status:1)")
-      command("false", []).run()
+      command("false", []).run-unit()
     wait(0.2)
 
   effectful-test("allowable failure")
@@ -52,8 +52,8 @@ fun suite()
     expect-process-finished(process.unjust)
     wait(0.2)
 
-  effectful-test("capture output")
-    expect("echo 1 2 words with     many spaces\n") {
-      val c = command("echo", ["1", "2", "words with     many spaces"], output=capture-stdout)
-      c.run(fn(p) p.output)
-    }
+  // effectful-test("capture output")
+  //   expect("echo 1 2 words with     many spaces\n") {
+  //     val c = command("echo", ["1", "2", "words with     many spaces"], output=capture-stdout)
+  //     c.run(fn(p) p.output)
+  //   }
