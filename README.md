@@ -22,14 +22,47 @@ All operations can fail, and all callbacks can have an error callback.
 All handles need to be closed when no longer in use.
 
 One-off requests: Close in the callback.
-Long-lived handles: Close when reference count reaches zero.
+Long-lived handles: Close when reference count reaches zero. Freeing of memory doesn't happen until the (C) close callback is invoked.
 Callbacks, usually don't require anything. Move ownership of resources into Koka. 
 - Since Koka can capture the handles given to callbacks in closures, they do not need to be passed back to Koka. Just pass the new data.
 
 All operations with Koka callbacks (anything asynchronous), needs to store the callback in the C handle / request struct's data member. We should assert that there is not already something in the data member (concurrent requests from the same handle) - and return an error before allocating anything.
+
+### Handles, callbacks and errors:
+
+The macro `KK_ALLOC_INIT_BOX_HANDLE(timer);` will allocate, initialize and box a uv_timer_t structure, with its `data` field set to `NULL`.
+
+To store the (koka) callback, use `kk_assign_uv_callback(timer, callback, _ctx);`. This will fail (assert) if there's a concurrent operation using the same handle.
+
+Then trigger the uv operation, e.g. `int status = uv_timer_start(timer_uvhnd, kk_uv_timer_unit_callback, timeout, 0);`
+
+Use one of the appropriate `kk_uv_check_return_*` macros to return the appropriate value.
+
+In the (C) callback function, you can invoke the stored koka callback via e.g. `kk_resolve_uv_callback((uv_handle_t*)uv_timer, NULL, kk_get_context(););`
+
+You can pass a non-NULL value if the callback accepts an argument.
+
+This will invoke the callback, drop the captured reference to the handle, and reset the handle's `data` to `NULL`.
 
 ### Details for specific design decisions for special cases:
 -- TODO 
 
 ### Details for multi-threading / multi-processing:
 -- TODO
+
+### Resource cleanup:
+
+Long-lived handles are reference counted like any other koka value.
+
+Each callback relating to a handle has a reference to the handle, which is dropped after the callback fires. This ensures a resource stays live as long as there are any pending callbacks for it.
+
+uv requires that raw handles remain live until after the handle is closed, _and_ the close callback has been invoked. So the sequence of events for destruction is:
+ - reference count drops to zero (no remaining references or pending callbacks)
+ - the koka finalizer (kk_uv_free_handle) runs, calling close()
+ - the on_close callback is invoked by libuv, and memory is deallocated
+
+Note that due to `close` being part of an object's destruction, it's not possible to _also_ explicitly close a UV handle. If you need to dynamically close a resource while others may still be referencing it, you could place it behind an opaque `ref` to ensure the ref holds the only copy, and then replace it with e.g. `Nothing` to drop the resource.
+
+You can also use scoped references, to ensure a handle can't outlive the scope.
+
+// TODO when is koka guaranteed to drop an object?

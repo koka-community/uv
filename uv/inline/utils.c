@@ -4,14 +4,34 @@ static kk_uv_utils__uv_status_code kk_uv_status_to_status_code(int32_t status, k
 }
 #else
 
+// void kk_handle_free(void *p, kk_block_t *block, kk_context_t *_ctx) {
+//     uv_handle_t *hnd = (uv_handle_t *)p;
+//     kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)hnd->data;
+//     kk_function_drop(hndcb->callback, kk_context()); // Drop the callback
+//     kk_free(hndcb, kk_context()); // Free the memory used for the callback and box
+//     hnd->data = NULL; // Clear the reference to this
+//     uv_close(hnd, NULL);
+//     // p will be freed by uv.
+// }
+
+// UV requires that we don't deallocate the handle until the close callback
+// has been invoked.
+void kk_handle_free_after_close(uv_handle_t *hnd) {
+  kk_hnd_callback_t* cb_struct = (kk_hnd_callback_t*)hnd->data;
+  if (cb_struct != NULL) {
+    // In theory, uv will invoke the callback on close (before invoking the on_close callback) so
+    // this should never happen.
+    // (we could free up values here, but we'd be repeating kk_resolve_uv_callback. Don't bother unless
+    // we find a valid use case for this sequence of events)
+    kk_warning_message("uv handle freed with an operation pending - this will leak memory\n");
+  }
+
+  kk_free(hnd, kk_get_context());
+}
+
 void kk_handle_free(void *p, kk_block_t *block, kk_context_t *_ctx) {
-    uv_handle_t *hnd = (uv_handle_t *)p;
-    kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)hnd->data;
-    kk_function_drop(hndcb->callback, kk_context()); // Drop the callback
-    kk_free(hndcb, kk_context()); // Free the memory used for the callback and box
-    hnd->data = NULL; // Clear the reference to this
-    uv_close(hnd, NULL);
-    // p will be freed by uv.
+  uv_handle_t *hnd = (uv_handle_t *)p;
+  uv_close(hnd, kk_handle_free_after_close);
 }
 
 void kk_set_uv_loop(uv_loop_t* loop) {

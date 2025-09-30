@@ -32,6 +32,7 @@ uv_buf_t* kk_bytes_list_to_uv_buffs(kk_std_core_types__list buffs, int* size, kk
 uv_buf_t* kk_bytes_to_uv_buffs(kk_bytes_t bytes, kk_context_t* _ctx);
 
 void kk_handle_free(void* p, kk_block_t* block, kk_context_t* _ctx);
+void kk_request_free(void* p, kk_block_t* block, kk_context_t* _ctx);
 
 #define kk_uv_exn_callback(callback, result) \
   kk_function_call(void, (kk_function_t, kk_std_core_exn__error, kk_context_t*), callback, (callback, result, kk_context()), kk_context());
@@ -45,49 +46,81 @@ void kk_handle_free(void* p, kk_block_t* block, kk_context_t* _ctx);
 #define kk_uv_okay_callback(callback, result) \
   kk_uv_exn_callback(callback, kk_std_core_exn__new_Ok(result, kk_context()))
 
-typedef struct  {
+typedef struct {
   kk_function_t callback;
   kk_box_t hnd;
+  // TODO add `bytes`?
 } kk_hnd_callback_t;
 
+// TODO drop this struct? Or at least make the layout match kk_hnd_callback_t?
 typedef struct kk_uv_buff_callback_s {
   kk_function_t callback;
   kk_bytes_t bytes;
 } kk_uv_buff_callback_t;
 
-static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, kk_bytes_t bytes, uv_handle_t* handle, kk_context_t* _ctx) {
-  kk_uv_buff_callback_t* c = kk_malloc(sizeof(kk_uv_buff_callback_t), _ctx);
-  c->callback = cb;
-  c->bytes = bytes;
-  handle->data = c;
-  return c;
+// Get the raw handle corresponding to a boxed handle (or request!)
+static inline uv_handle_t* kk_uv_get_raw_handle(kk_box_t kk_handle, kk_context_t* _ctx) {
+  return (uv_handle_t*)kk_cptr_raw_unbox_borrowed(kk_handle, _ctx);
 }
 
-// Sets the data of the handle to point to the callback
-// TODO: Check if data is already assigned?
-#define kk_set_hnd_cb(hnd_t, handle, uvhnd, callback) \
-  hnd_t* uvhnd = kk_owned_handle_to_uv_handle(hnd_t, handle); \
-  kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context()); \
-  uvhnd_cb->callback = callback; \
-  uvhnd_cb->hnd = handle.internal; \
-  uvhnd->data = uvhnd_cb;
+static inline kk_box_t kk_init_uv_handle(void* handle, kk_context_t* _ctx) {
+  ((uv_handle_t*)handle)->data = NULL;
+  return kk_cptr_raw_box(&kk_handle_free, handle, _ctx);
+}
 
-// TODO: Should I get the ctx from the loop?
-#define kk_uv_hnd_get_callback(handle, kk_hnd, callback) \
-  kk_context_t* _ctx = kk_get_context(); \
-  kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)handle->data; \
-  kk_box_t kk_hnd = hndcb->hnd; \
-  kk_function_t callback = hndcb->callback;
-
-#define kk_new_req_cb(req_t, req, cb) \
-  req_t* req = kk_malloc(sizeof(req_t), kk_context()); \
-  req->data = kk_function_as_ptr(cb, kk_context());
-
-#define kk_uv_get_callback(req, cb) \
-  kk_context_t* _ctx = kk_get_context(); \
-  kk_function_t cb = kk_function_from_ptr(req->data, kk_context());
+// Allocate, initialize and box a handle
+#define KK_ALLOC_INIT_BOX_HANDLE(typ) \
+  uv_##typ##_t* typ##_uvhnd = (uv_##typ##_t*)kk_malloc(sizeof(uv_##typ##_t), kk_context()); \
+  uv_##typ##_init(uvloop(), typ##_uvhnd); \
+  kk_box_t typ = kk_init_uv_handle(typ##_uvhnd, kk_context());
 
 
+// Sets the data of the handle to point to the callback struct
+// (containing the function and a reference to the handle)
+static inline void kk_assign_uv_callback(
+  kk_box_t handle,
+  kk_function_t cb,
+  kk_context_t* _ctx
+) {
+  uv_handle_t* uvhnd = kk_uv_get_raw_handle(handle, _ctx);
+  kk_assert(uvhnd->data == NULL);
+  kk_hnd_callback_t* cb_struct = kk_malloc(sizeof(kk_hnd_callback_t), _ctx);
+  cb_struct->hnd = kk_box_dup(handle, _ctx);
+  cb_struct->callback = cb;
+  uvhnd->data = cb_struct;
+}
+
+// access the cb_struct from a raw handle
+static inline kk_hnd_callback_t* kk_get_callback_struct(uv_handle_t* uvhnd) {
+  kk_hnd_callback_t* cb_struct = (kk_hnd_callback_t*)uvhnd->data;
+  kk_assert(cb_struct != NULL);
+  return cb_struct;
+}
+
+static inline void kk_resolve_callback_struct(
+  uv_handle_t* uvhnd,
+  kk_hnd_callback_t* cb_struct, // must not be NULL
+  kk_box_t* arg,
+  kk_context_t* _ctx
+) {
+  uvhnd->data = NULL;
+  kk_function_t callback = cb_struct->callback;
+  if (arg == NULL) {
+    kk_function_call(void, (kk_function_t, kk_context_t*), callback, (callback, _ctx), _ctx);
+  } else {
+    kk_function_call(void, (kk_function_t, kk_box_t, kk_context_t*), callback, (callback, *arg, _ctx), _ctx);
+  }
+
+  // cb_struct->callback is "dropped" by calling it; so we just need to drop the handle
+  kk_box_drop(cb_struct->hnd, _ctx);
+  // and then free the cb struct itself
+  kk_free(cb_struct, _ctx);
+}
+
+// Convenience to access then invoke callback
+static inline void kk_resolve_uv_callback(uv_handle_t* uvhnd, kk_box_t* arg, kk_context_t* _ctx) {
+  kk_resolve_callback_struct(uvhnd, kk_get_callback_struct(uvhnd), arg, _ctx);
+}
 
 
 // TODO: Change all apis to return status code or return error, not a mix
