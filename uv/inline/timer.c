@@ -91,12 +91,12 @@ kk_std_core_exn__error kk_wasm_timer_start(kk_uv_timer__timer timer, int64_t tim
 // #define kk_uv_to_tm_box(hnd) handle_to_owned_kk_handle_box(hnd, kk_free_fun, timer, timer, Timer)
 
 void kk_uv_timer_unit_callback(uv_timer_t* uv_timer) {
-  kk_resolve_uv_callback((uv_handle_t*)uv_timer, NULL, kk_get_context(););
+  kk_resolve_uv_callback((uv_handle_t*)uv_timer, NULL, kk_get_context());
 }
 
 kk_std_core_exn__error kk_uv_timer_set_timeout(int64_t timeout, kk_function_t callback, kk_context_t* _ctx) {
   KK_ALLOC_INIT_BOX_HANDLE(timer);
-  kk_assign_uv_callback(timer, callback, _ctx);
+  kk_assign_uv_callback(kk_box_dup(timer, _ctx), callback, _ctx);
   int status = uv_timer_start(timer_uvhnd, kk_uv_timer_unit_callback, timeout, 0 /* no repeat */);
 
   // return the timer to the caller, so they can cancel it

@@ -85,7 +85,7 @@ static inline void kk_assign_uv_callback(
   uv_handle_t* uvhnd = kk_uv_get_raw_handle(handle, _ctx);
   kk_assert(uvhnd->data == NULL);
   kk_hnd_callback_t* cb_struct = kk_malloc(sizeof(kk_hnd_callback_t), _ctx);
-  cb_struct->hnd = kk_box_dup(handle, _ctx);
+  cb_struct->hnd = handle;
   cb_struct->callback = cb;
   uvhnd->data = cb_struct;
 }
@@ -105,16 +105,16 @@ static inline void kk_resolve_callback_struct(
 ) {
   uvhnd->data = NULL;
   kk_function_t callback = cb_struct->callback;
+
+  // cb_struct->callback is "dropped" by calling it; so we just need to drop the handle
+  kk_box_drop(cb_struct->hnd, _ctx);
+  kk_free(cb_struct, _ctx);
+
   if (arg == NULL) {
     kk_function_call(void, (kk_function_t, kk_context_t*), callback, (callback, _ctx), _ctx);
   } else {
     kk_function_call(void, (kk_function_t, kk_box_t, kk_context_t*), callback, (callback, *arg, _ctx), _ctx);
   }
-
-  // cb_struct->callback is "dropped" by calling it; so we just need to drop the handle
-  kk_box_drop(cb_struct->hnd, _ctx);
-  // and then free the cb struct itself
-  kk_free(cb_struct, _ctx);
 }
 
 // Convenience to access then invoke callback
