@@ -1,25 +1,15 @@
-function _init_timer(){
-  return {};
-}
-
-function _start_timer(timer, ms, repeat, fcn){
-  const rp = Number(repeat)
+function _set_timeout(timer, ms, fcn){
   const msx = Number(ms)
-  if (rp != 0) {
-    timer.id = setInterval(fcn, rp);
-    timer.repeat = rp;
-  } else {
-    timer.id = setTimeout(fcn, msx);
-  } 
+  const timer = {
+    id: setTimeout(fcn, msx)
+  };
+  return $std_core_exn.Ok(timer);
 }
 
-function _stop_timer(timer){
+function _clear_timeout(timer){
   if (timer.id) {
-    if (timer.repeat != 0) {
-      clearInterval(timer.id);
-    } else {
-      clearTimeout(timer.id);
-    }
+    clearTimeout(timer.id);
     timer.id = null;
   }
+  return $std_core_exn.Ok( $std_core_types._Unit_ );
 }

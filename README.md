@@ -30,7 +30,9 @@ All operations with Koka callbacks (anything asynchronous), needs to store the c
 
 ### Handles, callbacks and errors:
 
-The macro `KK_ALLOC_INIT_BOX_HANDLE(timer);` will allocate, initialize and box a uv_timer_t structure, with its `data` field set to `NULL`.
+The macro `KK_ALLOC_AND_BOX_HANDLE(timer);` will allocate and box a uv_timer_t structure. You must use the uv API to initialize this handle before using it (the macro defines the variable `<typ>_uvhnd`).
+
+After running any uv function returning a status, you'll likely want to use `kk_uv_check_bail_drops(status, {kk_box_drop(timer, _ctx);})`. You'll need to carefully account for all structures allocated so far in the function, and drop them all in the second argument (it's a C block).
 
 To store the (koka) callback, use `kk_assign_uv_callback(timer, callback, _ctx);`. This will fail (assert) if there's a concurrent operation using the same handle.
 
@@ -43,6 +45,8 @@ In the (C) callback function, you can invoke the stored koka callback via e.g. `
 You can pass a non-NULL value if the callback accepts an argument.
 
 This will invoke the callback, drop the captured reference to the handle, and reset the handle's `data` to `NULL`.
+
+At the end of the function, you can use `kk_uv_check_return_drops`, although using the `bail` pattern and then just returning `kk_std_core_exn__new_Ok(result, _ctx)` is more consistent.
 
 ### Details for specific design decisions for special cases:
 -- TODO 

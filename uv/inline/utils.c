@@ -31,6 +31,8 @@ void kk_handle_free_after_close(uv_handle_t *hnd) {
 
 void kk_handle_free(void *p, kk_block_t *block, kk_context_t *_ctx) {
   uv_handle_t *hnd = (uv_handle_t *)p;
+  kk_info_message("closing uv_handle type %d\n", hnd->type);
+
   uv_close(hnd, kk_handle_free_after_close);
 }
 

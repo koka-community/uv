@@ -32,7 +32,6 @@ uv_buf_t* kk_bytes_list_to_uv_buffs(kk_std_core_types__list buffs, int* size, kk
 uv_buf_t* kk_bytes_to_uv_buffs(kk_bytes_t bytes, kk_context_t* _ctx);
 
 void kk_handle_free(void* p, kk_block_t* block, kk_context_t* _ctx);
-void kk_request_free(void* p, kk_block_t* block, kk_context_t* _ctx);
 
 #define kk_uv_exn_callback(callback, result) \
   kk_function_call(void, (kk_function_t, kk_std_core_exn__error, kk_context_t*), callback, (callback, result, kk_context()), kk_context());
@@ -63,16 +62,14 @@ static inline uv_handle_t* kk_uv_get_raw_handle(kk_box_t kk_handle, kk_context_t
   return (uv_handle_t*)kk_cptr_raw_unbox_borrowed(kk_handle, _ctx);
 }
 
-static inline kk_box_t kk_init_uv_handle(void* handle, kk_context_t* _ctx) {
-  ((uv_handle_t*)handle)->data = NULL;
-  return kk_cptr_raw_box(&kk_handle_free, handle, _ctx);
-}
-
-// Allocate, initialize and box a handle
-#define KK_ALLOC_INIT_BOX_HANDLE(typ) \
+// Allocate, initialize and box a handle.
+// For simplicity, aborts if the resource fails to init.
+// Fix this if we encounter a resource which can actually fail initialization
+#define KK_ALLOC_AND_BOX_HANDLE(typ) \
   uv_##typ##_t* typ##_uvhnd = (uv_##typ##_t*)kk_malloc(sizeof(uv_##typ##_t), kk_context()); \
-  uv_##typ##_init(uvloop(), typ##_uvhnd); \
-  kk_box_t typ = kk_init_uv_handle(typ##_uvhnd, kk_context());
+  typ##_uvhnd->data = NULL; \
+  kk_box_t typ = kk_cptr_raw_box(&kk_handle_free, typ##_uvhnd, _ctx); \
+  kk_info_message("created uv_handle type %s\n", #typ);
 
 
 // Sets the data of the handle to point to the callback struct
@@ -92,18 +89,23 @@ static inline void kk_assign_uv_callback(
 
 // access the cb_struct from a raw handle
 static inline kk_hnd_callback_t* kk_get_callback_struct(uv_handle_t* uvhnd) {
-  kk_hnd_callback_t* cb_struct = (kk_hnd_callback_t*)uvhnd->data;
-  kk_assert(cb_struct != NULL);
-  return cb_struct;
+  return (kk_hnd_callback_t*)uvhnd->data;
 }
 
 static inline void kk_resolve_callback_struct(
   uv_handle_t* uvhnd,
-  kk_hnd_callback_t* cb_struct, // must not be NULL
+  kk_hnd_callback_t* cb_struct,
   kk_box_t* arg,
   kk_context_t* _ctx
 ) {
   uvhnd->data = NULL;
+
+  if (cb_struct == NULL) {
+    kk_warning_message("kk_resolve_callback_struct(cb=NULL) - dangling libuv operation?\n");
+    return;
+  }
+
+  kk_assert(cb_struct != NULL);
   kk_function_t callback = cb_struct->callback;
 
   // cb_struct->callback is "dropped" by calling it; so we just need to drop the handle
@@ -117,6 +119,25 @@ static inline void kk_resolve_callback_struct(
   }
 }
 
+// When invoking an operation which we know will cause a pending callback to be
+// skipped (e.g. uv_timer_stop), we explicitly free the callback resources.
+// Note that some "abort" operations will still invoke the callback (with status=UV_ECANCELED),
+// this function should not be used for those operations.
+static inline void kk_drop_pending_uv_callback(
+  uv_handle_t* uvhnd,
+  kk_context_t* _ctx
+) {
+  kk_hnd_callback_t* cb_struct = kk_get_callback_struct(uvhnd);
+  if(cb_struct == NULL) {
+    // perhaps the operation was cancelled after the callback was invoked
+    return;
+  }
+  uvhnd->data = NULL;
+  kk_function_drop(cb_struct->callback, _ctx);
+  kk_box_drop(cb_struct->hnd, _ctx);
+  kk_free(cb_struct, _ctx);
+}
+
 // Convenience to access then invoke callback
 static inline void kk_resolve_uv_callback(uv_handle_t* uvhnd, kk_box_t* arg, kk_context_t* _ctx) {
   kk_resolve_callback_struct(uvhnd, kk_get_callback_struct(uvhnd), arg, _ctx);
@@ -125,12 +146,25 @@ static inline void kk_resolve_uv_callback(uv_handle_t* uvhnd, kk_box_t* arg, kk_
 
 // TODO: Change all apis to return status code or return error, not a mix
 
-// If the status is not OK, drop before returning the status code
+// If the status is not OK, return Error(...). Otherwise continue
+#define kk_uv_check_bail(status) \
+  if (status < UV_OK) { \
+    return kk_async_error_from_errno(status, kk_context()); \
+  }
+
+// If the status is not OK, return Error(...) (after dropping)
+#define kk_uv_check_bail_drops(status, drops) \
+  if (status < UV_OK) { \
+    do drops while (0); \
+    return kk_async_error_from_errno(status, kk_context()); \
+  }
+
+// Return Ok(()) or Error(...) based on status. Drops in failure case.
 #define kk_uv_check_status_drops(status, drops) \
   if (status < UV_OK) { \
     do drops while (0); \
   } \
-  return kk_uv_utils_int_fs_status_code(status, kk_context()); \
+  return kk_uv_utils_int_fs_status_code(status, kk_context());
 
 // Sometimes the return value is a file descriptor which is why this is a < UV_OK check instead of == UV_OK
 #define kk_uv_check_return(err, result) \

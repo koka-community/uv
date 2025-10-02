@@ -2,6 +2,7 @@ import std/test
 import std/async/async
 import uv/event-loop
 import std/os/process
+import std/num/int32
 
 fun expect-contains(s: string, f: () -> io string)
   val result = f()
@@ -18,6 +19,14 @@ fun suite(): <async,test<<io,async>>> ()
       wait(0.1)
       1
     }
+
+  effectful-test("clear-timeout cleanup")
+    val result: ref<global,_> = ref(Nothing)
+    fun cb()
+      result.set(Just("done"))
+    val timeout = set-timeout(cb, 1000.int32)
+    clear-timeout(timeout)
+    expect(Just("done")) { !result }
 
   // catches errors during event loop finalization
   effectful-test("successful process")
