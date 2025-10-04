@@ -88,10 +88,21 @@ static void kk_uv_loop_close(kk_context_t* _ctx) {
   kk_free(uvloop(), _ctx);
 }
 
-// static void kk_uv_close(kk_uv_utils__uv_handle handle, kk_function_t callback, kk_context_t* _ctx) {
-//   kk_set_hnd_cb(uv_handle_t, handle, uvhnd, callback)
-//   return uv_close(uvhnd, kk_uv_handle_close_callback);
-// }
+static kk_std_core_exn__error kk_uv_close(kk_uv_utils__uv_handle handle, kk_context_t* _ctx) {
+  bool is_unique = true; /* TODO: kk_datatype_ptr_is_unique(handle.internal, _ctx); */
+  kk_uv_utils__uv_handle_drop(handle, _ctx); // drop regardless
+  if (is_unique) {
+    return kk_std_core_exn__new_Ok(kk_unit_box(kk_Unit), _ctx);
+  } else {
+    kk_define_string_literal(, err_msg, 22, "uv_close(): resource is still referenced", _ctx);
+    return kk_std_core_exn__new_Error(
+      kk_std_core_exn__new_Exception(
+        err_msg, kk_uv_utils__new_AsyncExn(kk_reuse_null, 0, UV_EBUSY, _ctx),
+        _ctx),
+      _ctx
+    );
+  }
+}
 
 #endif
 // UV allocator helpers, getting thread local context
@@ -131,10 +142,10 @@ static void kk_async_loop_close(kk_context_t* _ctx) {
   #endif
 }
 
-// static void kk_async_close(kk_uv_utils__uv_handle handle, kk_function_t callback, kk_context_t* _ctx) {
-//   #if __EMSCRIPTEN__
-//     return kk_Unit;
-//   #else
-//     return kk_uv_close(handle, callback, _ctx);
-//   #endif
-// }
+static kk_std_core_exn__error kk_async_close(kk_uv_utils__uv_handle handle, kk_context_t* _ctx) {
+  #if __EMSCRIPTEN__
+    return kk_std_core_exn__new_Ok(kk_unit_box(kk_Unit), _ctx);
+  #else
+    return kk_uv_close(handle, _ctx);
+  #endif
+}

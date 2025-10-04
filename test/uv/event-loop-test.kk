@@ -20,13 +20,26 @@ fun suite(): <async,test<<io,async>>> ()
       1
     }
 
-  effectful-test("clear-timeout cleanup")
+  effectful-test("clear-timeout")
     val result: ref<global,_> = ref(Nothing)
     fun cb()
       result.set(Just("done"))
-    val timeout = set-timeout(cb, 1000.int32)
+    val timeout = set-timeout(cb, 50.int32)
     clear-timeout(timeout)
-    expect(Just("done")) { !result }
+    wait(0.1)
+    expect(Nothing) { !result }
+  
+  // TODO
+  // effectful-test("close with non-unique reference")
+  //   val timeout = set-timeout({ () }, 50.int32)
+  //   val backup = timeout
+  //   val first-close = close(timeout.uv-handle)
+  //   close(backup).untry
+  //   expect(Just("TODO")) { first-close.error-message }
+  // effectful-test("close with unique reference")
+  //   val timeout = set-timeout({ () }, 50.int32)
+  //   val t: uv-handle = timeout.timer/uv-handle
+  //   close(timeout.uv-handle).untry
 
   // catches errors during event loop finalization
   effectful-test("successful process")

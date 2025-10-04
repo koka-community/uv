@@ -93,8 +93,21 @@ extern close-loop(): io-noexn ()
   cs inline ""
   js inline ""
 
-// // Closes a uv handle
-// pub extern close(hnd: uv-handle, callback: () -> io-noexn ()): io-noexn ()
-//   c "kk_async_close"
-//   cs inline ""
-//   js inline ""
+// Attempt to close this resource. UV resources are dropped when
+// their refcount reaches zero, so this is really an assertion
+// that the provided handle is the last reference to this resource.
+//
+// Actual resource finalization will occur asynchronously.
+//
+// It's never necessary to call this function, but it can be useful:
+// - to confirm there are no unexpected dangling references keeping a resource alive
+// - as an easy way to keep a resource alive until you explicitly pass it to `close()`
+//
+// If the resource is not unique, this function raises the UV_BUSY async exception.
+pub fun close(hnd: uv-handle): io ()
+  close-c(hnd).untry
+
+extern close-c(hnd: uv-handle): io-noexn error<()>
+  c "kk_async_close"
+  cs inline ""
+  js inline ""
