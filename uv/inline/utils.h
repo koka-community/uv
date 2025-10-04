@@ -57,6 +57,33 @@ typedef struct kk_uv_buff_callback_s {
   kk_bytes_t bytes;
 } kk_uv_buff_callback_t;
 
+// TODO: remove?
+static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, kk_bytes_t bytes, uv_handle_t* handle, kk_context_t* _ctx) {
+  kk_uv_buff_callback_t* c = kk_malloc(sizeof(kk_uv_buff_callback_t), _ctx);
+  c->callback = cb;
+  c->bytes = bytes;
+  handle->data = c;
+  return c;
+}
+
+// TODO: remove?
+// Sets the data of the handle to point to the callback
+// TODO: Check if data is already assigned?
+#define kk_set_hnd_cb(hnd_t, handle, uvhnd, callback) \
+  hnd_t* uvhnd = kk_owned_handle_to_uv_handle(hnd_t, handle); \
+  kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context()); \
+  uvhnd_cb->callback = callback; \
+  uvhnd_cb->hnd = handle.internal; \
+  uvhnd->data = uvhnd_cb;
+
+// TODO: remove?
+// TODO: Should I get the ctx from the loop?
+#define kk_uv_hnd_get_callback(handle, kk_hnd, callback) \
+  kk_context_t* _ctx = kk_get_context(); \
+  kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)handle->data; \
+  kk_box_t kk_hnd = hndcb->hnd; \
+  kk_function_t callback = hndcb->callback;
+
 // Get the raw handle corresponding to a boxed handle (or request!)
 static inline uv_handle_t* kk_uv_get_raw_handle(kk_box_t kk_handle, kk_context_t* _ctx) {
   return (uv_handle_t*)kk_cptr_raw_unbox_borrowed(kk_handle, _ctx);
@@ -72,6 +99,11 @@ static inline uv_handle_t* kk_uv_get_raw_handle(kk_box_t kk_handle, kk_context_t
   kk_info_message("created uv_handle type %s\n", #typ);
 
 
+// TODO: remove?
+#define kk_new_req_cb(req_t, req, cb) \
+  req_t* req = kk_malloc(sizeof(req_t), kk_context()); \
+  req->data = kk_function_as_ptr(cb, kk_context());
+
 // Sets the data of the handle to point to the callback struct
 // (containing the function and a reference to the handle)
 static inline void kk_assign_uv_callback(
@@ -86,6 +118,11 @@ static inline void kk_assign_uv_callback(
   cb_struct->callback = cb;
   uvhnd->data = cb_struct;
 }
+
+// TODO: remove?
+#define kk_uv_get_callback(req, cb) \
+  kk_context_t* _ctx = kk_get_context(); \
+  kk_function_t cb = kk_function_from_ptr(req->data, kk_context());
 
 // access the cb_struct from a raw handle
 static inline kk_hnd_callback_t* kk_get_callback_struct(uv_handle_t* uvhnd) {
