@@ -3,6 +3,13 @@ import std/async/async
 import uv/event-loop
 import std/os/process
 import std/num/int32
+import std/num/int64
+import uv/timer
+
+fun error-message(e: error<_>)
+  match e
+    Error(e) -> Just(e.message)
+    Ok(_) -> Nothing
 
 fun expect-contains(s: string, f: () -> io string)
   val result = f()
@@ -28,28 +35,27 @@ fun suite(): <async,test<<io,async>>> ()
     clear-timeout(timeout)
     wait(0.1)
     expect(Nothing) { !result }
-  
-  // TODO
-  // effectful-test("close with non-unique reference")
-  //   val timeout = set-timeout({ () }, 50.int32)
-  //   val backup = timeout
-  //   val first-close = close(timeout.uv-handle)
-  //   close(backup).untry
-  //   expect(Just("TODO")) { first-close.error-message }
-  // effectful-test("close with unique reference")
-  //   val timeout = set-timeout({ () }, 50.int32)
-  //   val t: uv-handle = timeout.timer/uv-handle
-  //   close(timeout.uv-handle).untry
+
+  effectful-test("close with non-unique reference")
+    // pending timeout has its own reference
+    val timeout: timer = timer-set-timeout(50.int64, { () })
+    expect(Just("uv_close(): resource is still referenced")) {
+      try { close(timeout.uv-handle) }.error-message
+    }
+
+  effectful-test("close with unique reference")
+    val timeout = timer-set-timeout(500.int64, { () })
+    timeout.timer-clear-timeout()
+    expect(()) { close(timeout.uv-handle) }
 
   // catches errors during event loop finalization
   effectful-test("successful process")
     // TODO: use async process once that's stable
     expect(0) {
-      run-system("koka -e test/uv/embedded-event-loop.kk")
+      run-system("koka -e test/uv/embedded-event-loop.kk >/dev/null")
     }
 
-  // TODO: this doesn't fail, even though the above exit code is reported as 1
-  // effectful-test("successful process (output)")
-  //   expect-contains("hello, world!")
-  //     run-system-read("koka -e test/uv/embedded-event-loop.kk").untry
+  effectful-test("successful process (output)")
+    expect-contains("hello, world!")
+      run-system-read("koka -e test/uv/embedded-event-loop.kk").untry
 

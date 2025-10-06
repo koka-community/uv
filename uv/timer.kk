@@ -32,3 +32,6 @@ pub fun timer-clear-timeout(t: timer): io ()
 extern timer-clear-timeout-c(t: timer): io-noexn error<unit>
   c "kk_uv_timer_clear_timeout"
   js inline "_clear_timeout()"
+
+pub fun uv-handle(t: timer): uv-handle
+  Uv-handle(t.internal)

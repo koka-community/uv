@@ -89,12 +89,12 @@ static void kk_uv_loop_close(kk_context_t* _ctx) {
 }
 
 static kk_std_core_exn__error kk_uv_close(kk_uv_utils__uv_handle handle, kk_context_t* _ctx) {
-  bool is_unique = true; /* TODO: kk_datatype_ptr_is_unique(handle.internal, _ctx); */
-  kk_uv_utils__uv_handle_drop(handle, _ctx); // drop regardless
+  bool is_unique = kk_datatype_is_unique(kk_datatype_unbox(handle.internal), _ctx);
+  kk_uv_utils__uv_handle_drop(handle, _ctx); // drop this reference regardless
   if (is_unique) {
     return kk_std_core_exn__new_Ok(kk_unit_box(kk_Unit), _ctx);
   } else {
-    kk_define_string_literal(, err_msg, 22, "uv_close(): resource is still referenced", _ctx);
+    kk_define_string_literal(, err_msg, 40, "uv_close(): resource is still referenced", _ctx);
     return kk_std_core_exn__new_Error(
       kk_std_core_exn__new_Exception(
         err_msg, kk_uv_utils__new_AsyncExn(kk_reuse_null, 0, UV_EBUSY, _ctx),
