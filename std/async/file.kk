@@ -33,11 +33,23 @@ fun open-raw(path: string, flags: int32, action: uv-file -> <async,io|e> a): <as
 pub fun open-read(path: string, action: forall<s> (file-read<s>) -> <async,io|e> a): <async,io|e> a
   open-raw(path, o_RDONLY) fn(f) action(File-read(f))
 
-pub fun read<f>(file: f, ?readable: (f) -> file-read<s>): <asyncx> bytes
-  // TODO: keep reading until EOF
+pub fun read<f>(file: f, ?readable: (f) -> file-read<s>): <async,io> bytes
   val r = readable(file)
-  val (bytes, _n) = await1(fn(cb) -> basic/read(r.internal, 2048.int32, cb)).untry
-  bytes
+  var result: bytes := empty()
+  while {
+    match read-chunk(r)
+      Just(chunk) ->
+        result := result ++ chunk
+        True
+      Nothing -> False
+  } { () }
+  result
+
+val current-offset = -1.int32
+
+fun read-chunk<s>(f: file-read<s>): <asyncx> maybe<bytes>
+  val (bytes, n) = await1(fn(cb) -> uv/read(f.internal, 1024.int32, offset = current-offset, cb = cb)).untry
+  if n == 0 /* EOF */ then Nothing else Just(bytes)
 
 fun write-flags(write-mode: write-mode)
   o_CREAT.and(match write-mode
