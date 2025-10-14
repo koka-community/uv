@@ -20,6 +20,10 @@ fun main(): io-noexn ()
   with async/handle
   run-tests(suite)
 
+fun wait-in-finally(action: () -> <io,async|e> a): <io,async|e> a
+  with finally { wait(0.1) }
+  action()
+
 fun suite(): <async,test<<io,async>>> ()
   effectful-test("test")
     expect(1) {
@@ -59,3 +63,17 @@ fun suite(): <async,test<<io,async>>> ()
     expect-contains("hello, world!")
       run-system-read("koka -e test/uv/embedded-event-loop.kk").untry
 
+  // TODO: group doesn't seem to work with effectful-test
+  // group("sleep in finalize")
+  effectful-test("single value")
+    val result = wait-in-finally { 1 }
+    expect(1) { result }
+
+  effectful-test("single string")
+    val (result) = wait-in-finally { "some long string" }
+    expect("some long string") { result }
+
+  effectful-test("tuple")
+    val (one, _) = wait-in-finally { (1, 2) }
+    println("got result")
+    expect(1) { one }
