@@ -1,3 +1,5 @@
+module std/async/async-file
+
 import uv/file
 import std/os/env
 import std/os/path
@@ -27,7 +29,7 @@ type write-mode
 
 fun open-raw(path: string, flags: int32, action: uv-file -> <async,io|e> a): <async,io|e> a
   val f = await1(fn(cb) -> uv/open(path, flags, 0.int32, cb)).untry
-  with finally { await1(fn(cb) -> uv/close(f, cb)).untry }
+  // with finally { await1(fn(cb) -> uv/close(f, cb)).untry }
   action(f)
 
 pub fun open-read(path: string, action: forall<s> (file-read<s>) -> <async,io|e> a): <async,io|e> a
@@ -69,7 +71,7 @@ pub fun tempfile(action: forall<s> (tempfile<s>) -> <async,io|e> a, name: string
     Nothing -> tempdir()
   val template = base / (name ++ "XXXXXX")
   val (f, path) = await1(fn(cb) -> mkstemp(template.string, cb)).untry
-  with finally { await1(fn(cb) -> uv/close(f, cb)).untry }
+  with finally { uv/close(f, fn(_) trace("here")) }
   action(Tempfile(f, path))
 
 pub fun open-rw(path: string, action: forall<s> (file-rw<s>) -> <async,io|e> a,
