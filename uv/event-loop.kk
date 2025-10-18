@@ -14,6 +14,7 @@ pub import uv/utils
 pub import uv/timer
 pub import std/async/async
 import std/num/int32
+import std/num/int64
 
 extern import
   c { conan="libuv[>=1.47.0]"; vcpkg="libuv"; library="uv" }
@@ -22,17 +23,23 @@ extern import
   c file "inline/event-loop.c"
   cs file "inline/event-loop.cs"
 
+fun infallible(action: () -> <exn|e> a, ?kk-file-line: string): e a
+  try(action) fn(ex)
+    impossible("Infallible action failed")
+
 // Sets a timeout for libuv / javscript / C# event loops
-pub extern set-timeout( cb : () -> io-noexn (), ms : int32 ) : io-noexn any
-  cs "_Async.SetTimeout"
-  js "setTimeout"
-  c "kk_set_timeout"
+pub fun set-timeout( cb : () -> io-noexn (), ms : int32 ) : io-noexn any
+  infallible { timer-set-timeout(ms.int64, cb).timer/internal }
+  // cs "_Async.SetTimeout"
+  // js "setTimeout"
+  // c "kk_set_timeout"
 
 // Clears a timeout for libuv / javscript / C# event loops
-pub extern clear-timeout( tid : any) : io-noexn ()
-  cs "_Async.ClearTimeout"
-  js "clearTimeout"
-  c "kk_clear_timeout"
+pub fun clear-timeout( tid : any) : io-noexn ()
+  infallible { timer-clear-timeout(Timer(tid)) }
+  // cs "_Async.ClearTimeout"
+  // js "clearTimeout"
+  // c "kk_clear_timeout"
 
 // Runs an async action on the default uv event loop, and exceptions at the top level exit the async loop.
 pub fun default-async-uv(action: () -> <async,io> a): io a
@@ -86,8 +93,21 @@ extern close-loop(): io-noexn ()
   cs inline ""
   js inline ""
 
-// Closes a uv handle
-pub extern close(hnd: uv-handle, callback: () -> io-noexn ()): io-noexn ()
+// Attempt to close this resource. UV resources are dropped when
+// their refcount reaches zero, so this is really an assertion
+// that the provided handle is the last reference to this resource.
+//
+// Actual resource finalization will occur asynchronously.
+//
+// It's never necessary to call this function, but it can be useful:
+// - to confirm there are no unexpected dangling references keeping a resource alive
+// - as an easy way to keep a resource alive until you explicitly pass it to `close()`
+//
+// If the resource is not unique, this function raises the UV_BUSY async exception.
+pub fun close(hnd: uv-handle): io ()
+  close-c(hnd).untry
+
+extern close-c(hnd: uv-handle): io-noexn error<()>
   c "kk_async_close"
   cs inline ""
   js inline ""

@@ -30,24 +30,35 @@ static inline void kk_free_ctx(void* p) {
   kk_free(p, kk_get_context());
 }
 
-static void kk_uv_handle_close_callback(uv_handle_t* handle){
-  kk_uv_hnd_get_callback(handle, kk_hnd, callback)
-  handle->data = NULL;
-  kk_unit_callback(callback)
-  kk_box_drop(kk_hnd, kk_context());
-}
+// static void kk_uv_handle_close_callback(uv_handle_t* handle){
+//   kk_uv_hnd_get_callback(handle, kk_hnd, callback)
+//   handle->data = NULL;
+//   kk_unit_callback(callback)
+//   kk_box_drop(kk_hnd, kk_context());
+// }
 
-kk_box_t kk_set_timeout(kk_function_t cb, int64_t time, kk_context_t* _ctx) {
-  kk_uv_timer__timer t = kk_uv_timer_timer_init(_ctx);
-  kk_uv_timer_timer_start(t, time, 0, cb, _ctx);
-  return kk_uv_timer__timer_box(t, _ctx);
-}
+// kk_box_t kk_set_timeout(kk_function_t cb, int64_t time, kk_context_t* _ctx) {
+//   kk_box_t timer = kk_alloc_uv_handle(_ctx);
+//   uv_timer_t* t = kk_uv_get_raw_handle(timer, _ctx);
+//   uv_timer_init(t);
+//   uv_timer_start(t, );
 
-kk_unit_t kk_clear_timeout(kk_box_t boxed_timer, kk_context_t* _ctx) {
-  kk_uv_timer__timer timer = kk_uv_timer__timer_unbox(boxed_timer, KK_OWNED, _ctx);
-  kk_uv_timer_timer_stop(timer, _ctx);
-  return kk_Unit;
-}
+//   kk_uv_timer_timer_start(t, time, 0, cb, _ctx);
+//   return kk_uv_timer__timer_box(t, _ctx);
+
+//   kk_box_t request = kk_alloc_uv_request(timer, cb, _ctx);
+//   kk_drop(timer, _ctx);
+
+//   kk_uv_timer__timer t = kk_uv_timer_timer_init(_ctx);
+//   kk_uv_timer_timer_start(t, time, 0, cb, _ctx);
+//   return kk_uv_timer__timer_box(t, _ctx);
+// }
+
+// kk_unit_t kk_clear_timeout(kk_box_t boxed_timer, kk_context_t* _ctx) {
+//   kk_uv_timer__timer timer = kk_uv_timer__timer_unbox(boxed_timer, KK_OWNED, _ctx);
+//   kk_uv_timer_timer_stop(timer, _ctx);
+//   return kk_Unit;
+// }
 
 
 static inline void kk_uv_alloc_init(kk_context_t* _ctx){
@@ -77,9 +88,20 @@ static void kk_uv_loop_close(kk_context_t* _ctx) {
   kk_free(uvloop(), _ctx);
 }
 
-static void kk_uv_close(kk_uv_utils__uv_handle handle, kk_function_t callback, kk_context_t* _ctx) {
-  kk_set_hnd_cb(uv_handle_t, handle, uvhnd, callback)
-  return uv_close(uvhnd, kk_uv_handle_close_callback);
+static kk_std_core_exn__error kk_uv_close(kk_uv_utils__uv_handle handle, kk_context_t* _ctx) {
+  bool is_unique = kk_datatype_is_unique(kk_datatype_unbox(handle.internal), _ctx);
+  kk_uv_utils__uv_handle_drop(handle, _ctx); // drop this reference regardless
+  if (is_unique) {
+    return kk_std_core_exn__new_Ok(kk_unit_box(kk_Unit), _ctx);
+  } else {
+    kk_define_string_literal(, err_msg, 40, "uv_close(): resource is still referenced", _ctx);
+    return kk_std_core_exn__new_Error(
+      kk_std_core_exn__new_Exception(
+        err_msg, kk_uv_utils__new_AsyncExn(kk_reuse_null, 0, UV_EBUSY, _ctx),
+        _ctx),
+      _ctx
+    );
+  }
 }
 
 #endif
@@ -120,10 +142,10 @@ static void kk_async_loop_close(kk_context_t* _ctx) {
   #endif
 }
 
-static void kk_async_close(kk_uv_utils__uv_handle handle, kk_function_t callback, kk_context_t* _ctx) {
+static kk_std_core_exn__error kk_async_close(kk_uv_utils__uv_handle handle, kk_context_t* _ctx) {
   #if __EMSCRIPTEN__
-    return kk_Unit;
+    return kk_std_core_exn__new_Ok(kk_unit_box(kk_Unit), _ctx);
   #else
-    return kk_uv_close(handle, callback, _ctx);
+    return kk_uv_close(handle, _ctx);
   #endif
 }
