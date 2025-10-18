@@ -13,22 +13,15 @@ fun main(): io-noexn ()
 fun suite(): <async,test<<io,async>>> ()
   val contents = "hello, world!"
 
-  // effectful-test("write & read a file")
-  //   val path = "/tmp/kktest-1"
-  //   open-write(path) fn(f)
-  //     f.write(contents.bytes)
-
-  //   expect(contents)
-  //     open-read(path) fn(f)
-  //       f.read().string()
-
   effectful-test("tempfile")
-    println("start")
-    val (_path, file-contents) = tempfile(name="mytmp-") fn(f)
-      println("file at " ++ f.path ++ "...")
+    val (path, file-contents) = tempfile(name="mytmp-") fn(f)
       f.write(contents.bytes)
-      println("reading...")
-      (f.path, f.read())
+      f.fsync()
 
-    expect(contents) { file-contents.string }
-    // expect(path) { "TODO" }
+      // read via the handle itself and also by reopening its path
+      val from-tmp = f.read().string
+      val from-new = open-read(f.path) fn(r) -> r.read().string
+      (f.path, (from-tmp, from-new))
+
+    expect((contents, contents)) { file-contents }
+    expect(True) { path.contains("mytmp-") }

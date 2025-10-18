@@ -85,3 +85,7 @@ pub fun write<f>(file: f, bytes: bytes, ?writable: (f) -> file-write<s>): <async
   val _n = await1(fn(cb) -> write(w.internal, bytes, 0.int64, cb)).untry
   // TODO is n ever less than `bytes` len?
   ()
+
+pub fun fsync<f>(file: f, ?writable: (f) -> file-write<s>): <asyncx> ()
+  val w = writable(file)
+  await1(fn(cb) -> fsync(w.internal, cb)).untry
