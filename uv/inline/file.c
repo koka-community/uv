@@ -93,9 +93,8 @@ static void kk_std_os_file_buff_cb(uv_fs_t* req) {
     kk_bytes_drop(bytes, _ctx);
     kk_uv_error_callback(callback, result)
   } else {
-    kk_bytes_t btsadj = kk_bytes_adjust_length(bytes, (kk_ssize_t)result + 1, _ctx);
-    kk_bytes_set(btsadj, (uint64_t)result, (int8_t)'\0', _ctx);
-    // TODO?: Maybe would be better to not add a terminating null byte, and fix it when converting to a string instead?
+    // Shrink the returned buffer to what was actually read
+    kk_bytes_t btsadj = kk_bytes_adjust_length(bytes, (kk_ssize_t)result, _ctx);
     kk_std_core_types__tuple2 tuple = kk_std_core_types__new_Tuple2(kk_bytes_box(btsadj), kk_integer_box(kk_integer_from_ssize_t(result, _ctx), _ctx), _ctx); /*(1004, 1005)*/
     kk_box_t tupleboxed = kk_std_core_types__tuple2_box(tuple, _ctx);
     kk_uv_okay_callback(callback, tupleboxed)
