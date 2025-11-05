@@ -27,10 +27,16 @@ type write-mode
   Truncate
   Append
 
+// TODO: promote to core/hnd?
+fun nonrepeatable(action: () -> e a): e a
+  with initially fn(i)
+    debug/assert("nonrepeatable action resumed more than once", i == 0)
+  action()
+
 fun open-raw(path: string, flags: int32, action: uv-file -> <async,io|e> a): <async,io|e> a
   val f = await1(fn(cb) -> uv/open(path, flags, 0.int32, cb)).untry
-  // with finally { await1(fn(cb) -> uv/close(f, cb)).untry }
-  action(f)
+  with finally { await1(fn(cb) -> uv/close(f, cb)).untry }
+  nonrepeatable { action(f) }
 
 pub fun open-read(path: string, action: forall<s> (file-read<s>) -> <async,io|e> a): <async,io|e> a
   open-raw(path, o_RDONLY) fn(f) action(File-read(f))
@@ -71,8 +77,8 @@ pub fun tempfile(action: forall<s> (tempfile<s>) -> <async,io|e> a, name: string
     Nothing -> tempdir()
   val template = base / (name ++ "XXXXXX")
   val (f, path) = await1(fn(cb) -> mkstemp(template.string, cb)).untry
-  with finally { uv/close(f, fn(_) trace("here")) }
-  action(Tempfile(f, path))
+  with finally { await1(fn(cb) -> uv/close(f, cb)).untry }
+  nonrepeatable { action(Tempfile(f, path)) }
 
 pub fun open-rw(path: string, action: forall<s> (file-rw<s>) -> <async,io|e> a,
   write-mode: write-mode = Truncate
