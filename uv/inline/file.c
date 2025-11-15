@@ -93,9 +93,8 @@ static void kk_std_os_file_buff_cb(uv_fs_t* req) {
     kk_bytes_drop(bytes, _ctx);
     kk_uv_error_callback(callback, result)
   } else {
-    kk_bytes_t btsadj = kk_bytes_adjust_length(bytes, (kk_ssize_t)result + 1, _ctx);
-    kk_bytes_set(btsadj, (uint64_t)result, (int8_t)'\0', _ctx);
-    // TODO?: Maybe would be better to not add a terminating null byte, and fix it when converting to a string instead?
+    // Shrink the returned buffer to what was actually read
+    kk_bytes_t btsadj = kk_bytes_adjust_length(bytes, (kk_ssize_t)result, _ctx);
     kk_std_core_types__tuple2 tuple = kk_std_core_types__new_Tuple2(kk_bytes_box(btsadj), kk_integer_box(kk_integer_from_ssize_t(result, _ctx), _ctx), _ctx); /*(1004, 1005)*/
     kk_box_t tupleboxed = kk_std_core_types__tuple2_box(tuple, _ctx);
     kk_uv_okay_callback(callback, tupleboxed)
@@ -105,7 +104,7 @@ static void kk_std_os_file_buff_cb(uv_fs_t* req) {
 static kk_unit_t kk_uv_fs_read(kk_uv_file__uv_file file, kk_bytes_t bytes, ssize_t offset, kk_function_t cb, kk_context_t* _ctx) {
   uv_fs_t* fs_req = kk_malloc(sizeof(uv_fs_t), _ctx);
   kk_uv_buff_callback_t* wrapper = kk_new_uv_buff_callback(cb, bytes, (uv_handle_t*)fs_req, _ctx);
-  uv_buf_t* uv_buffs = kk_malloc(sizeof(uv_buf_t)*1, _ctx);
+  uv_buf_t* uv_buffs = kk_malloc(sizeof(uv_buf_t)+1, _ctx);
   uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, &uv_buffs[0].len, _ctx);
   uv_fs_read(uvloop(), fs_req, (uv_file)file.internal, uv_buffs, 1, offset, kk_std_os_file_buff_cb);
   return kk_Unit;
@@ -219,10 +218,10 @@ static void kk_std_os_fs_mkstemp_cb(uv_fs_t* req) {
     uv_fs_req_cleanup(req);
     kk_uv_error_callback(callback, result)
   } else {
-    kk_string_t str = kk_string_alloc_raw((const char*) req->path, true, _ctx);
+    kk_string_t str = kk_string_alloc_dup_valid_utf8((const char*) req->path, _ctx);
     uv_fs_req_cleanup(req);
     kk_uv_file__uv_file file = kk_uv_file__new_Uv_file((intptr_t)result, _ctx);
-    kk_std_core_types__tuple2 tuple = kk_std_core_types__new_Tuple2(kk_string_box(str), kk_uv_file__uv_file_box(file, _ctx), _ctx); /*(1004, 1005)*/
+    kk_std_core_types__tuple2 tuple = kk_std_core_types__new_Tuple2(kk_uv_file__uv_file_box(file, _ctx), kk_string_box(str), _ctx); /*(1004, 1005)*/
     kk_box_t tupleboxed = kk_std_core_types__tuple2_box(tuple, _ctx);
     kk_uv_okay_callback(callback, tupleboxed)
   }
@@ -231,7 +230,7 @@ static void kk_std_os_fs_mkstemp_cb(uv_fs_t* req) {
 static kk_unit_t kk_uv_fs_mkstemp(kk_string_t tpl, kk_function_t cb, kk_context_t* _ctx) {
   kk_ssize_t len;
   kk_new_fs_req_cb(fs_req, cb)
-  uv_fs_mkstemp(uvloop(), fs_req, kk_string_cbuf_borrow(tpl, &len, _ctx), kk_std_os_fs_mkdtemp_cb);
+  uv_fs_mkstemp(uvloop(), fs_req, kk_string_cbuf_borrow(tpl, &len, _ctx), kk_std_os_fs_mkstemp_cb);
   kk_string_drop(tpl, _ctx);
   return kk_Unit;
 }
