@@ -99,13 +99,16 @@ static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, k
   } \
   return kk_uv_utils_int_fs_status_code(status, kk_context()); \
 
-// Sometimes the return value is a file descriptor which is why this is a < UV_OK check instead of == UV_OK
-#define kk_uv_check_return(err, result) \
+// Check the uv status code and return a kk_std_core_exn__error Error if unsuccessful. Continue on success
+#define kk_uv_check_bail(err) \
   if (err < UV_OK) { \
     return kk_async_error_from_errno(err, kk_context()); \
-  } else { \
-    return kk_std_core_exn__new_Ok(result, kk_context()); \
   }
+
+// Sometimes the return value is a file descriptor which is why this is a < UV_OK check instead of == UV_OK
+#define kk_uv_check_return(err, result) \
+  kk_uv_check_bail(err); \
+  return kk_std_core_exn__new_Ok(result, kk_context());
 
 // Typically used to clean up when an error occurs
 #define kk_uv_check_return_err_drops(err, result, drops) \
