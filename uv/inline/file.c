@@ -82,7 +82,7 @@ static kk_std_core_exn__error kk_uv_fs_open_sync(kk_string_t path, int32_t flags
 
 static void kk_std_os_file_buff_cb(uv_fs_t* req) {
   kk_context_t* _ctx = kk_get_context();
-  kk_uv_buff_callback_t* wrapper = (kk_uv_buff_callback_t*)req->data;
+  kk_uv_hnd_callback_t* wrapper = (kk_uv_hnd_callback_t*)req->data;
   kk_function_t callback = wrapper->callback;
   kk_bytes_t bytes = wrapper->bytes;
   // kk_info_message("Clength %d", req->result);
@@ -103,7 +103,7 @@ static void kk_std_os_file_buff_cb(uv_fs_t* req) {
 
 static kk_unit_t kk_uv_fs_read(kk_uv_file__uv_file file, kk_bytes_t bytes, ssize_t offset, kk_function_t cb, kk_context_t* _ctx) {
   uv_fs_t* fs_req = kk_malloc(sizeof(uv_fs_t), _ctx);
-  kk_uv_buff_callback_t* wrapper = kk_new_uv_buff_callback(cb, bytes, (uv_handle_t*)fs_req, _ctx);
+  kk_uv_hnd_callback_t* wrapper = kk_new_uv_buff_callback(cb, bytes, (uv_handle_t*)fs_req, _ctx);
   uv_buf_t* uv_buffs = kk_malloc(sizeof(uv_buf_t)+1, _ctx);
   uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, &uv_buffs[0].len, _ctx);
   uv_fs_read(uvloop(), fs_req, (uv_file)file.internal, uv_buffs, 1, offset, kk_std_os_file_buff_cb);

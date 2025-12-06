@@ -44,7 +44,7 @@ pub extern accept(server: uv-stream, client: uv-stream): io-noexn uv-status-code
 
 // Read data from an incoming stream. The `callback` will be made several times until there is no more data to read or `read-stop()` is called.
 // Returns `UV_EALREADY` when called twice, and `UV_EINVAL` when the stream is closing.
-pub extern read-start(stream: uv-stream, callback: (bytes) -> io-noexn ()): io-noexn ()
+pub extern read-start(stream: uv-stream, callback: (error<maybe<bytes>>) -> io-noexn ()): io-noexn ()
   c "kk_uv_read_start"
 
 // Stop reading data from the stream. The read callback will no longer be called.

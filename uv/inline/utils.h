@@ -32,6 +32,7 @@ uv_buf_t* kk_bytes_list_to_uv_buffs(kk_std_core_types__list buffs, int* size, kk
 uv_buf_t* kk_bytes_to_uv_buffs(kk_bytes_t bytes, kk_context_t* _ctx);
 
 void kk_handle_free(void* p, kk_block_t* block, kk_context_t* _ctx);
+void kk_uv_req_free(void* p, kk_block_t *block, kk_context_t *_ctx);
 
 #define kk_uv_exn_callback(callback, result) \
   kk_function_call(void, (kk_function_t, kk_std_core_exn__error, kk_context_t*), callback, (callback, result, kk_context()), kk_context());
@@ -45,26 +46,65 @@ void kk_handle_free(void* p, kk_block_t* block, kk_context_t* _ctx);
 #define kk_uv_okay_callback(callback, result) \
   kk_uv_exn_callback(callback, kk_std_core_exn__new_Ok(result, kk_context()))
 
+// TODO: rename kk_uv_callback_t?
+// TODO: this could be a union if it's too awkward to
+// populate all fields
 typedef struct  {
   kk_function_t callback;
   kk_box_t hnd;
+  kk_bytes_t bytes;
 } kk_hnd_callback_t;
 
-typedef struct kk_uv_buff_callback_s {
-  kk_function_t callback;
-  kk_bytes_t bytes;
-} kk_uv_buff_callback_t;
+void kk_uv_hnd_callback_free(kk_hnd_callback_t* hndcb, kk_context_t* _ctx);
+kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 
-static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, kk_bytes_t bytes, uv_handle_t* handle, kk_context_t* _ctx) {
-  kk_uv_buff_callback_t* c = kk_malloc(sizeof(kk_uv_buff_callback_t), _ctx);
-  c->callback = cb;
-  c->bytes = bytes;
-  handle->data = c;
-  return c;
-}
+#define kk_uv_hnd_data_free(hnd) \
+  if(hnd->data != NULL) { \
+    kk_uv_hnd_callback_free((kk_hnd_callback_t*)hnd->data, kk_context()); \
+    hnd->data = NULL; \
+  };
+
+// static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, kk_bytes_t bytes, uv_handle_t* handle, kk_context_t* _ctx) {
+//   kk_uv_buff_callback_t* c = kk_malloc(sizeof(kk_uv_buff_callback_t), _ctx);
+//   c->callback = cb;
+//   c->bytes = bytes;
+//   handle->data = c;
+//   return c;
+// }
 
 // Sets the data of the handle to point to the callback
 // TODO: Check if data is already assigned?
+static inline int kk_uv_hnd_data_create(kk_box_t internal, kk_function_t callback, kk_context_t* _ctx) {
+  uv_handle_t* uvhnd = kk_cptr_unbox_borrowed(internal, _ctx);
+  if (uvhnd->data != NULL) {
+    return UV_EBUSY;
+  }
+  kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context());
+  uvhnd_cb->callback = callback;
+  uvhnd_cb->hnd = kk_box_dup(internal, _ctx);
+  uvhnd_cb->bytes = kk_bytes_empty();
+  uvhnd->data = uvhnd_cb;
+  return UV_OK;
+}
+
+// take a copy of the cb and drop the rest of the kk_uv_hnd_callback resource
+// Typically used after creating a callback, but the operation failed so now
+// the callback is being manually invoked, unused by libuv.
+static inline kk_function_t kk_uv_hnd_data_take_cb(uv_handle_t *uvhnd, kk_context_t* _ctx) {
+  kk_assert(uvhnd->data != NULL);
+  kk_hnd_callback_t* uvhnd_cb = (kk_hnd_callback_t*)uvhnd->data;
+  kk_function_t cb = kk_function_dup(uvhnd_cb->callback, _ctx);
+  kk_uv_hnd_callback_free(uvhnd_cb, _ctx);
+  uvhnd->data = NULL;
+  return cb;
+}
+
+#define kk_uv_hnd_wrapper_data_take_cb(wrapper) \
+  kk_uv_hnd_data_take_cb(kk_cptr_unbox_borrowed(wrapper.internal, kk_context()), kk_context());
+
+// Sets the data of the handle to point to the callback
+// TODO: Check if data is already assigned?
+// TODO: remove usage, this doesn't dup handle nor check for leaked operations
 #define kk_set_hnd_cb(hnd_t, handle, uvhnd, callback) \
   hnd_t* uvhnd = kk_owned_handle_to_uv_handle(hnd_t, handle); \
   kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context()); \
@@ -72,7 +112,17 @@ static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, k
   uvhnd_cb->hnd = handle.internal; \
   uvhnd->data = uvhnd_cb;
 
+// TODO is kk_hnd actually needed/used? The caller will need to free it
+// consider kk_uv_hnd_data_take_cb instead
+#define kk_uv_hnd_remove_callback(handle, kk_hnd, callback) \
+  kk_context_t* _ctx = kk_get_context(); \
+  kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)handle->data; \
+  handle->data = NULL; \
+  kk_box_t kk_hnd = hndcb->hnd; \
+  kk_function_t callback = hndcb->callback;
+
 // TODO: Should I get the ctx from the loop?
+// TODO: rename copy_callback or something to indicate reuse
 #define kk_uv_hnd_get_callback(handle, kk_hnd, callback) \
   kk_context_t* _ctx = kk_get_context(); \
   kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)handle->data; \
@@ -83,7 +133,11 @@ static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, k
   req_t* req = kk_malloc(sizeof(req_t), kk_context()); \
   req->data = kk_function_as_ptr(cb, kk_context());
 
-#define kk_uv_get_callback(req, cb) \
+#define kk_new_req(req_t, req) \
+  req_t* req = kk_malloc(sizeof(req_t), kk_context()); \
+  req->data = NULL;
+
+#define kk_uv_req_get_callback(req, cb) \
   kk_context_t* _ctx = kk_get_context(); \
   kk_function_t cb = kk_function_from_ptr(req->data, kk_context());
 

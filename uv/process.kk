@@ -60,6 +60,3 @@ pub fun signal(^process: uv-process, signal: int32): exn ()
 
 extern try-signal(^process: uv-process, signal: int32): error<()>
   c "kk_uv_proc_signal"
-
-pub extern mkpipe(): error<(uv-stream, uv-stream)>
-  c "kk_uv_proc_pipe"

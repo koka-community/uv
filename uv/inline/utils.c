@@ -6,12 +6,23 @@ static kk_uv_utils__uv_status_code kk_uv_status_to_status_code(int32_t status, k
 
 void kk_handle_free(void *p, kk_block_t *block, kk_context_t *_ctx) {
     uv_handle_t *hnd = (uv_handle_t *)p;
-    kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)hnd->data;
-    kk_function_drop(hndcb->callback, kk_context()); // Drop the callback
-    kk_free(hndcb, kk_context()); // Free the memory used for the callback and box
-    hnd->data = NULL; // Clear the reference to this
+    kk_uv_hnd_data_free(hnd);
     uv_close(hnd, NULL);
     // p will be freed by uv.
+}
+
+// free the request struct and return the raw callback function
+kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx) {
+  kk_assert(hnd->data != NULL);
+  kk_function_t cb = kk_function_from_ptr(hnd->data, _ctx);
+  kk_free(hnd, _ctx);
+  return cb;
+}
+
+void kk_uv_hnd_callback_free(kk_hnd_callback_t* hndcb, kk_context_t* _ctx) {
+  kk_function_drop(hndcb->callback, kk_context()); // Drop the callback
+  kk_bytes_drop(hndcb->bytes, kk_context());
+  kk_free(hndcb, kk_context()); // Free the memory used for the callback and box
 }
 
 void kk_set_uv_loop(uv_loop_t* loop) {

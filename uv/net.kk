@@ -51,6 +51,9 @@ pub value struct sock-addr
   pub data: string
   pub port: maybe<int32> = Nothing;
 
+pub fun sock-addr/show(addr: sock-addr)
+  "Sock-addr(" ++ addr.family.show ++ ", " ++ addr.data.show ++ ", " ++ addr.port.show ++ ")"
+
 // A uv tcp handle
 pub value struct uv-tcp { internal: any }
 // A uv OS socket handle
@@ -74,6 +77,9 @@ pub extern tcp-init(): io-noexn error<uv-tcp>
 pub extern tcp/bind(^tcp: uv-tcp, addr: sock-addr, flags: int32): io-noexn uv-status-code
   c "kk_uv_tcp_bind"
 
+pub extern tcp/get-sockname(^tcp: uv-tcp): io-noexn error<sock-addr>
+  c "kk_uv_tcp_getsockname"
+
 // Not all tcp handles are streams (e.g. servers)
 // Ensure there are safe wrappers
 pub inline fun tcp/stream(^tcp: uv-tcp): io-noexn uv-stream
@@ -90,5 +96,8 @@ pub inline fun stream/tcp(^tcp: uv-stream): io-noexn uv-tcp
 
 // Establish an IPv4 or IPv6 TCP connection. Provide an initialized TCP handle.
 // The callback is made when the connection has been established or when a connection error happened.
-pub extern tcp/connect(^tcp: uv-tcp, addr: sock-addr, callback: (uv-status-code) -> io-noexn ()): io-noexn uv-status-code
+pub extern tcp/connect(^tcp: uv-tcp, addr: sock-addr, callback: (uv-status-code) -> io-noexn ()): io-noexn ()
   c "kk_uv_tcp_connect"
+
+
+

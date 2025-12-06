@@ -158,37 +158,3 @@ static kk_std_core_exn__error kk_uv_proc_signal(kk_uv_process__uv_process proces
   int status = uv_process_kill(&wrapper->process, kk_signal);
   kk_uv_check_return(status, kk_unit_box(kk_Unit));
 }
-
-static kk_std_core_exn__error kk_uv_proc_pipe(kk_context_t* _ctx) {
-  uv_file files[2];
-  int status = uv_pipe(files, 0, 0);
-  kk_uv_check_bail(status);
-
-  uv_pipe_t readable;
-  status = uv_pipe_init(uvloop(), &readable, 0);
-  kk_uv_check_bail(status);
-
-  status = uv_pipe_open(&readable, files[0]);
-  kk_uv_check_bail(status);
-
-  uv_pipe_t writable;
-  status = uv_pipe_init(uvloop(), &writable, 0);
-  kk_uv_check_bail(status);
-
-  status = uv_pipe_open(&writable, files[1]);
-  kk_uv_check_bail(status);
-
-  // everything has succeeded, do the mallocs and return
-  uv_pipe_t* readable_p = kk_malloc(sizeof(uv_pipe_t), _ctx);
-  memcpy(readable_p, &readable, sizeof(uv_pipe_t));
-
-  uv_pipe_t* writable_p = kk_malloc(sizeof(uv_pipe_t), _ctx);
-  memcpy(writable_p, &writable, sizeof(uv_pipe_t));
-
-  kk_std_core_types__tuple2 result = kk_std_core_types__new_Tuple2(
-    uv_handle_to_owned_kk_handle_box(readable_p, kk_free_fun, stream, stream),
-    uv_handle_to_owned_kk_handle_box(writable_p, kk_free_fun, stream, stream),
-    _ctx);
-
-  return kk_std_core_exn__new_Ok(kk_std_core_types__tuple2_box(result, _ctx), _ctx);
-}

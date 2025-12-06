@@ -106,7 +106,7 @@ kk_uv_timer__timer kk_uv_timer_init(kk_context_t* _ctx) {
 kk_unit_t kk_uv_timer_stop(kk_uv_timer__timer timer, kk_context_t* _ctx) {
   uv_timer_t* uv_timer = kk_tm_to_uv(timer);
   uv_timer_stop(uv_timer);
-  uv_close(uv_timer, NULL);
+  uv_close((uv_handle_t*)uv_timer, NULL);
   // kk_box_drop(timer.internal, _ctx); // The timer will be freed by libuv after processing the close.
   return kk_Unit;
 }

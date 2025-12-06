@@ -1,47 +1,39 @@
 // #include "std_os_net.h"
 #include "uv_event_dash_loop.h"
 
-static struct sockaddr* to_sockaddr(kk_uv_net__sock_addr addr, kk_context_t* _ctx){
+static int fill_sockaddr(struct sockaddr_storage* dest, kk_uv_net__sock_addr addr, kk_context_t* _ctx){
   int p;
+  kk_ssize_t len;
   if (kk_std_core_types__is_Just(addr.port, _ctx)){
     p = (int)kk_int32_unbox(addr.port._cons.Just.value, KK_BORROWED, _ctx);
   } else {
-    p = 80;
+    p = 0; // any available port
   }
   if (kk_uv_net__is_AF__INET(addr.family, _ctx)){
-    struct sockaddr_in* addrIn = kk_malloc(sizeof(struct sockaddr_in), _ctx);
-    kk_ssize_t len;
     const char* str = kk_string_cbuf_borrow(addr.data, &len, _ctx);
-    uv_ip4_addr(str, p, addrIn);
-    return (struct sockaddr*)addrIn;
+    int status = uv_ip4_addr(str, p, (struct sockaddr_in*)dest);
+    return status;
   } else if (kk_uv_net__is_AF__INET6(addr.family, _ctx)){
-    struct sockaddr_in6* addrIn6 = kk_malloc(sizeof(struct sockaddr_in6), _ctx);
-    kk_ssize_t len;
     const char* str = kk_string_cbuf_borrow(addr.data, &len, _ctx);
-    uv_ip6_addr(str, p, addrIn6);
-    return (struct sockaddr*)addrIn6;
+    return uv_ip6_addr(str, p, (struct sockaddr_in6*)dest);
   } else {
-    // family = AF_UNSPEC;
-    // Assume INET
-    struct sockaddr_in* addrIn = kk_malloc(sizeof(struct sockaddr_in), _ctx);
-    kk_ssize_t len;
-    const char* str = kk_string_cbuf_borrow(addr.data, &len, _ctx);
-    uv_ip4_addr(str, p, addrIn);
-    return (struct sockaddr*)addrIn;
-    // TODO: return error type error?
+    return UV_EAI_ADDRFAMILY;
   }
 }
 
 static kk_uv_net__sock_addr to_kk_sockaddr(struct sockaddr* addr, kk_context_t* _ctx){
   enum kk_uv_net__net_family_e family = kk_uv_net_AF__ANY;
+  // kk_warning_message("sockaddr port = %d\n", ((struct sockaddr_in*)addr)->sin_port)
   
   kk_std_core_types__maybe portMaybe;
   if (addr->sa_family == AF_INET){
     family = kk_uv_net_AF__INET;
-    portMaybe = kk_std_core_types__new_Just(kk_int32_box(((struct sockaddr_in*)addr)->sin_port, _ctx), _ctx);
+    int port = ntohs(((struct sockaddr_in*)addr)->sin_port);
+    portMaybe = kk_std_core_types__new_Just(kk_int32_box(port, _ctx), _ctx);
   } else if (addr->sa_family == AF_INET6){
     family = kk_uv_net_AF__INET6;
-    portMaybe = kk_std_core_types__new_Just(kk_int32_box(((struct sockaddr_in6*)addr)->sin6_port, _ctx), _ctx);
+    int port = ntohs(((struct sockaddr_in6*)addr)->sin6_port);
+    portMaybe = kk_std_core_types__new_Just(kk_int32_box(port, _ctx), _ctx);
   } else {
     portMaybe = kk_std_core_types__new_Nothing(_ctx);
   }
@@ -102,61 +94,64 @@ static kk_std_core_exn__error kk_get_addrinfo(kk_string_t node, kk_string_t serv
 }
 
 static kk_std_core_exn__error kk_uv_tcp_init(kk_context_t* _ctx) {
-  uv_tcp_t* tcp = kk_malloc(sizeof(uv_tcp_t), _ctx);
+  kk_new_req(uv_tcp_t, tcp);
   int status = uv_tcp_init(uvloop(), tcp);
   kk_uv_check_return_err_drops(status, uv_handle_to_owned_kk_handle_box(tcp, kk_handle_free, net, tcp), {kk_free(tcp, _ctx);})
 }
 
-static kk_std_core_exn__error kk_uv_tcp_init_ex(int32_t flags, kk_context_t* _ctx) {
-  uv_tcp_t* tcp = kk_malloc(sizeof(uv_tcp_t), _ctx);
-  int status = uv_tcp_init_ex(uvloop(), tcp, (unsigned int)flags);
-  kk_uv_check_return_err_drops(status, uv_handle_to_owned_kk_handle_box(tcp, kk_handle_free, net, tcp), {kk_free(tcp, _ctx);})
-}
+// static kk_uv_utils__uv_status_code kk_uv_tcp_open(kk_uv_net__uv_tcp handle, kk_uv_net__uv_os_sock sock, kk_context_t* _ctx) {
+//   return kk_uv_utils_int_fs_status_code(uv_tcp_open(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), *((uv_os_sock_t*)sock.internal)), _ctx);
+// }
 
-static kk_uv_utils__uv_status_code kk_uv_tcp_open(kk_uv_net__uv_tcp handle, kk_uv_net__uv_os_sock sock, kk_context_t* _ctx) {
-  return kk_uv_utils_int_fs_status_code(uv_tcp_open(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), *((uv_os_sock_t*)sock.internal)), _ctx);
-}
+// static kk_uv_utils__uv_status_code kk_uv_tcp_nodelay(kk_uv_net__uv_tcp handle, bool enable, kk_context_t* _ctx) {
+//   return kk_uv_utils_int_fs_status_code(uv_tcp_nodelay(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), enable), _ctx);
+// }
 
-static kk_uv_utils__uv_status_code kk_uv_tcp_nodelay(kk_uv_net__uv_tcp handle, bool enable, kk_context_t* _ctx) {
-  return kk_uv_utils_int_fs_status_code(uv_tcp_nodelay(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), enable), _ctx);
-}
+// static kk_uv_utils__uv_status_code kk_uv_tcp_keepalive(kk_uv_net__uv_tcp handle, bool enable, uint32_t delay, kk_context_t* _ctx) {
+//   return kk_uv_utils_int_fs_status_code(uv_tcp_keepalive(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), enable, delay), _ctx);
+// }
 
-static kk_uv_utils__uv_status_code kk_uv_tcp_keepalive(kk_uv_net__uv_tcp handle, bool enable, uint32_t delay, kk_context_t* _ctx) {
-  return kk_uv_utils_int_fs_status_code(uv_tcp_keepalive(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), enable, delay), _ctx);
-}
-
-static kk_uv_utils__uv_status_code kk_uv_tcp_simultaneous_accepts(kk_uv_net__uv_tcp handle, bool enable, kk_context_t* _ctx) {
-  return kk_uv_utils_int_fs_status_code(uv_tcp_simultaneous_accepts(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), enable), _ctx);
-}
+// static kk_uv_utils__uv_status_code kk_uv_tcp_simultaneous_accepts(kk_uv_net__uv_tcp handle, bool enable, kk_context_t* _ctx) {
+//   return kk_uv_utils_int_fs_status_code(uv_tcp_simultaneous_accepts(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), enable), _ctx);
+// }
 
 static kk_uv_utils__uv_status_code kk_uv_tcp_bind(kk_uv_net__uv_tcp handle, kk_uv_net__sock_addr addr, uint32_t flags, kk_context_t* _ctx) {
-  struct sockaddr* sockAddr = to_sockaddr(addr, _ctx);
-  return kk_uv_utils_int_fs_status_code(uv_tcp_bind(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), sockAddr, flags), _ctx);
+  struct sockaddr_storage sockaddr;
+  int status = fill_sockaddr(&sockaddr, addr, _ctx);
+  if (status != UV_OK) {
+    return status;
+  }
+  return kk_uv_utils_int_fs_status_code(uv_tcp_bind(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), (struct sockaddr*)&sockaddr, flags), _ctx);
 }
 
 static kk_std_core_exn__error kk_uv_tcp_getsockname(kk_uv_net__uv_tcp handle, kk_context_t* _ctx) {
-  struct sockaddr_storage sockAddr;
-  int len;
-  int status = uv_tcp_getsockname(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), (struct sockaddr*)&sockAddr, &len);
-  kk_uv_check_return(status, kk_uv_net__sock_addr_box(to_kk_sockaddr((struct sockaddr*)&sockAddr, _ctx), _ctx))
+  struct sockaddr_storage sockaddr;
+  int len = sizeof(sockaddr);
+  int status = uv_tcp_getsockname(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), (struct sockaddr*)&sockaddr, &len);
+  kk_uv_check_return(status, kk_uv_net__sock_addr_box(to_kk_sockaddr((struct sockaddr*)&sockaddr, _ctx), _ctx))
 }
 
-static kk_std_core_exn__error kk_uv_tcp_getpeername(kk_uv_net__uv_tcp handle, kk_context_t* _ctx) {
-  struct sockaddr_storage sockAddr;
-  int len;
-  int status = uv_tcp_getpeername(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), (struct sockaddr*)&sockAddr, &len);
-  kk_uv_check_return(status, kk_uv_net__sock_addr_box(to_kk_sockaddr((struct sockaddr*)&sockAddr, _ctx), _ctx))
-}
+// static kk_std_core_exn__error kk_uv_tcp_getpeername(kk_uv_net__uv_tcp handle, kk_context_t* _ctx) {
+//   struct sockaddr_storage sockaddr;
+//   int len = sizeof(sockaddr);
+//   int status = uv_tcp_getpeername(kk_owned_handle_to_uv_handle(uv_tcp_t, handle), (struct sockaddr*)&sockaddr, &len);
+//   kk_uv_check_return(status, kk_uv_net__sock_addr_box(to_kk_sockaddr((struct sockaddr*)&sockaddr, _ctx), _ctx))
+// }
 
 
 static void kk_uv_tcp_connect_callback(uv_connect_t* req, int status) {
-  kk_uv_get_callback(req, callback)
-  kk_function_call(void, (kk_function_t, kk_uv_utils__uv_status_code, kk_context_t*), callback, (callback, kk_uv_utils_int_fs_status_code(status, _ctx), _ctx), _ctx);  
+  kk_uv_req_get_callback(req, callback)
+  kk_uv_status_code_callback(callback, status);
   kk_free(req, _ctx);
 }
 
-static kk_uv_utils__uv_status_code kk_uv_tcp_connect(kk_uv_net__uv_tcp handle, kk_uv_net__sock_addr addr, kk_function_t callback, kk_context_t* _ctx) {
-  struct sockaddr* sockAddr = to_sockaddr(addr, _ctx);
-  kk_new_req_cb(uv_connect_t, req, callback)
-  kk_uv_check_status_drops(uv_tcp_connect(req, kk_owned_handle_to_uv_handle(uv_tcp_t, handle), sockAddr, kk_uv_tcp_connect_callback), {kk_function_drop(callback, _ctx);})
+static void kk_uv_tcp_connect(kk_uv_net__uv_tcp handle, kk_uv_net__sock_addr addr, kk_function_t callback, kk_context_t* _ctx) {
+  struct sockaddr_storage sockaddr;
+  int status = fill_sockaddr(&sockaddr, addr, _ctx);
+  if (status != UV_OK) {
+    kk_uv_status_code_callback(callback, status);
+  } else {
+    kk_new_req_cb(uv_connect_t, req, callback);
+    uv_tcp_connect(req, kk_owned_handle_to_uv_handle(uv_tcp_t, handle), (struct sockaddr*)&sockaddr, kk_uv_tcp_connect_callback);
+  }
 }
