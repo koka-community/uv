@@ -59,11 +59,11 @@ pub value struct uv-tcp { internal: any }
 // A uv OS socket handle
 pub value struct uv-os-sock { internal: intptr_t }
 
-pub inline fun get-addr-info(host : string, callback: (list<addr-info>) -> io-noexn (), hints : maybe<addr-info> = Nothing): io-noexn ()
-  uv-get-addr-info(host, "", hints, callback)
+// pub inline fun get-addr-info(host : string, callback: (list<addr-info>) -> io-noexn (), hints : maybe<addr-info> = Nothing): io-noexn ()
+//   uv-get-addr-info(host, "", hints, callback)
 
-extern uv-get-addr-info(node : string, service : string, hints : maybe<addr-info>, callback: (list<addr-info>) -> io-noexn ()): io-noexn ()
-  c "kk_get_addrinfo"
+// extern uv-get-addr-info(node : string, service : string, hints : maybe<addr-info>, callback: (list<addr-info>) -> io-noexn ()): io-noexn ()
+//   c "kk_get_addrinfo"
 
 // Initialize the handle. No socket is created as of yet.
 pub extern tcp-init(): io-noexn error<uv-tcp>

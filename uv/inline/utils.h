@@ -64,6 +64,61 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
     hnd->data = NULL; \
   };
 
+// friendly names for koka status code type
+#define kk_uv_status_code_t kk_uv_utils__uv_status_code
+#define kk_uv_status_code(i) kk_uv_utils_int_fs_status_code(i, kk_context())
+
+// ======== PATTERNS ========
+// = One-shot request =
+//
+// Performs a single async request with a callback.
+// Allocates, installs and then tears down the request/callback if unsuccessful
+#define kk_uv_oneshot_req_setup(kk_callback_fn, req_t, uv_setup_fn, handle_t, handle, ...) \
+  kk_new_req_cb(req_t, req, kk_callback_fn); \
+  handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
+  int status = uv_setup_fn(req, uvhnd, __VA_ARGS__); \
+  if (status != UV_OK) { \
+    kk_callback_fn = kk_uv_req_into_callback((uv_handle_t*)uvhnd, _ctx); \
+    kk_uv_status_code_callback(kk_callback_fn, status); \
+  }
+
+// Implementation of a oneshot request callback.
+// Frees the request
+#define kk_uv_oneshot_req_callback(req, status) \
+  kk_uv_req_get_callback(req, callback); \
+  kk_uv_status_code_callback(callback, status); \
+  kk_free(req, kk_context());
+
+// #define kk_uv_oneshot_req_callback1(req, status, arg_t, errval, set_result, drops) \
+//   kk_uv_req_get_callback(req, callback); \
+//   if (status < UV_OK) { \
+//     do drops while (0); \
+//     kk_function_call(void, (kk_function_t, arg_t, kk_context_t*), callback, (callback, errval, _ctx), _ctx); \
+//   } else { \
+//     arg_t result; \
+//     do set_result while (0); \
+//     do drops while (0); \
+//     kk_function_call(void, (kk_function_t, arg_t, kk_context_t*), callback, (callback, result, _ctx), _ctx); \
+//   } \
+//   kk_free(req, kk_context());
+
+// Implementation of a oneshot handle callback.
+// Removes the `data` cb struct from the handle.
+#define kk_uv_oneshot_hnd_callback(hnd, status) \
+  kk_uv_hnd_remove_callback(hnd, uvhnd, callback); \
+  kk_box_drop(uvhnd, _ctx); \
+  kk_uv_status_code_callback(callback, status);
+
+// An operation that stops / cancels an active
+// operation on a stream. Removes the handle's `data` and returns status
+// noop if data is already null
+#define kk_uv_hnd_cancel_return(handle_t, handle, uv_fn) \
+  handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
+  int status = uv_fn(uvhnd); \
+  kk_uv_hnd_data_free(uvhnd); \
+  return kk_uv_status_code(status);
+
+
 // static inline kk_uv_buff_callback_t* kk_new_uv_buff_callback(kk_function_t cb, kk_bytes_t bytes, uv_handle_t* handle, kk_context_t* _ctx) {
 //   kk_uv_buff_callback_t* c = kk_malloc(sizeof(kk_uv_buff_callback_t), _ctx);
 //   c->callback = cb;
