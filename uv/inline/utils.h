@@ -57,6 +57,7 @@ typedef struct  {
 } kk_hnd_callback_t;
 
 void kk_uv_hnd_callback_free(kk_hnd_callback_t* hndcb, kk_context_t* _ctx);
+kk_function_t kk_uv_hnd_callback_into_callback(kk_hnd_callback_t* hndcb, kk_context_t* _ctx);
 kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 
 #define kk_uv_hnd_data_free(hnd) \
@@ -72,8 +73,9 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 // ======== PATTERNS ========
 // = One-shot request =
 //
-// Performs a single async request with a callback.
+// Performs a single async request with a plain callback.
 // Allocates, installs and then tears down the request/callback if unsuccessful
+// TODO: invoke uv_callback_fn instead of kk_callback_fn, to ensure proper cleanup?
 #define kk_uv_oneshot_req_setup(kk_callback_fn, req_t, uv_setup_fn, handle_t, handle, ...) \
   kk_new_req_cb(req_t, req, kk_callback_fn); \
   handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
@@ -83,14 +85,15 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
     kk_uv_status_code_callback(kk_callback_fn, status); \
   }
 
-// as above, but with a leading uvloop argument
-#define kk_uv_oneshot_req_uvloop_setup(kk_callback_fn, req_t, uv_setup_fn, handle_t, handle, ...) \
-  kk_new_req_cb(req_t, req, kk_callback_fn); \
-  handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
-  int status = uv_setup_fn(req, uvhnd, __VA_ARGS__); \
+// Performs a single async request for the FS module
+#define kk_uv_oneshot_fs_setup(cb, bytes, uv_setup_fn, uv_callback_fn, drops, ...) \
+  kk_new_req(uv_fs_t, req); \
+  req->data = kk_uv_hnd_callback_create(NULL_BOX, cb, bytes, _ctx); \
+  int status = uv_setup_fn(uvloop(), req, __VA_ARGS__, uv_callback_fn); \
+  do drops while (0); \
   if (status != UV_OK) { \
-    kk_callback_fn = kk_uv_req_into_callback((uv_handle_t*)uvhnd, _ctx); \
-    kk_uv_status_code_callback(kk_callback_fn, status); \
+    req->result = status; \
+    uv_callback_fn(req); \
   }
 
 // Implementation of a oneshot request callback.
@@ -116,9 +119,41 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 // Implementation of a oneshot handle callback.
 // Removes the `data` cb struct from the handle.
 #define kk_uv_oneshot_hnd_callback(hnd, status) \
-  kk_uv_hnd_remove_callback(hnd, uvhnd, callback); \
-  kk_box_drop(uvhnd, _ctx); \
+  kk_context_t* _ctx = kk_get_context(); \
+  kk_uv_hnd_remove_callback(hnd, kk_hnd, callback); \
+  kk_box_drop(kk_hnd, _ctx); \
   kk_uv_status_code_callback(callback, status);
+
+// Implementation of a oneshot request callback for the FS module.
+// TODO: kk_hnd is just a unit box in practice, this is a bit confusing.
+// Consider union types
+#define kk_uv_oneshot_fs_callback(req) \
+  kk_context_t* _ctx = kk_get_context(); \
+  int status = req->result; \
+  uv_fs_req_cleanup(req); \
+  kk_uv_hnd_remove_callback(req, kk_hnd, callback); \
+  kk_box_drop(kk_hnd, _ctx); \
+  kk_free(req, _ctx); \
+  kk_uv_status_code_callback(callback, status);
+
+// Implementation of a oneshot request callback for the FS module with a single result,
+// i.e. an error<t>
+#define kk_uv_oneshot_fs_callback1(req, success_expr) \
+  kk_context_t* _ctx = kk_get_context(); \
+  int status = req->result; \
+  kk_box_t successval; \
+  if (status >= 0) { \
+    successval = success_expr; \
+  } \
+  kk_uv_hnd_remove_callback(req, kk_hnd, callback); \
+  uv_fs_req_cleanup(req); \
+  kk_box_drop(kk_hnd, _ctx); \
+  kk_free(req, _ctx); \
+  if (status < 0) { \
+    kk_uv_error_callback(callback, status); \
+  } else { \
+    kk_uv_okay_callback(callback, successval); \
+  }
 
 // An operation that stops / cancels an active
 // operation on a stream. Removes the handle's `data` and returns status
@@ -138,6 +173,10 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 //   return c;
 // }
 
+#define NULL_BOX kk_unit_box(kk_Unit)
+#define NULL_BYTES kk_bytes_empty()
+
+
 // Sets the data of the handle to point to the callback
 static inline int kk_uv_hnd_data_create(kk_box_t internal, kk_function_t callback, kk_context_t* _ctx) {
   uv_handle_t* uvhnd = kk_cptr_unbox_borrowed(internal, _ctx);
@@ -148,19 +187,17 @@ static inline int kk_uv_hnd_data_create(kk_box_t internal, kk_function_t callbac
   uvhnd_cb->callback = callback;
   // TODO: don't dup here? The caller should dup, as per koka rules
   uvhnd_cb->hnd = kk_box_dup(internal, _ctx);
-  uvhnd_cb->bytes = kk_bytes_empty();
+  uvhnd_cb->bytes = NULL_BYTES;
   uvhnd->data = uvhnd_cb;
   return UV_OK;
 }
 
-static inline void kk_uv_req_data_create(kk_box_t internal, kk_function_t callback, kk_bytes_t bytes, kk_context_t* _ctx) {
+static inline kk_hnd_callback_t* kk_uv_hnd_callback_create(kk_box_t hnd, kk_function_t callback, kk_bytes_t bytes, kk_context_t* _ctx) {
   kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context());
-  uv_handle_t* uvhnd = kk_cptr_unbox_borrowed(internal, _ctx);
   uvhnd_cb->callback = callback;
-  uvhnd_cb->hnd = internal;
+  uvhnd_cb->hnd = hnd;
   uvhnd_cb->bytes = bytes;
-
-  uvhnd->data = uvhnd_cb;
+  return uvhnd_cb;
 }
 
 // take a copy of the cb and drop the rest of the kk_uv_hnd_callback resource
@@ -191,7 +228,6 @@ static inline kk_function_t kk_uv_hnd_data_take_cb(uv_handle_t *uvhnd, kk_contex
 // TODO is kk_hnd actually needed/used? The caller will need to free it
 // consider kk_uv_hnd_data_take_cb instead
 #define kk_uv_hnd_remove_callback(handle, kk_hnd, callback) \
-  kk_context_t* _ctx = kk_get_context(); \
   kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)handle->data; \
   handle->data = NULL; \
   kk_box_t kk_hnd = hndcb->hnd; \

@@ -19,10 +19,16 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx) {
   return cb;
 }
 
+kk_function_t kk_uv_hnd_callback_into_callback(kk_hnd_callback_t* hndcb, kk_context_t* _ctx) {
+  kk_function_t callback = hndcb->callback;
+  kk_bytes_drop(hndcb->bytes, _ctx);
+  kk_free(hndcb, _ctx); // Free the memory used for the callback and box
+  return callback;
+}
+
 void kk_uv_hnd_callback_free(kk_hnd_callback_t* hndcb, kk_context_t* _ctx) {
-  kk_function_drop(hndcb->callback, kk_context()); // Drop the callback
-  kk_bytes_drop(hndcb->bytes, kk_context());
-  kk_free(hndcb, kk_context()); // Free the memory used for the callback and box
+  kk_function_t callback = kk_uv_hnd_callback_into_callback(hndcb, _ctx);
+  kk_function_drop(callback, _ctx);
 }
 
 void kk_hnd_callback_replace_bytes(kk_bytes_t *dest, kk_bytes_t replacement, kk_context_t* _ctx) {
