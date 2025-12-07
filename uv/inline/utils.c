@@ -25,6 +25,12 @@ void kk_uv_hnd_callback_free(kk_hnd_callback_t* hndcb, kk_context_t* _ctx) {
   kk_free(hndcb, kk_context()); // Free the memory used for the callback and box
 }
 
+void kk_hnd_callback_replace_bytes(kk_bytes_t *dest, kk_bytes_t replacement, kk_context_t* _ctx) {
+  // drop previous entry
+  kk_bytes_drop(*dest, _ctx);
+  *dest = replacement;
+}
+
 void kk_set_uv_loop(uv_loop_t* loop) {
   kk_uv_loop_default = loop;
 }

@@ -33,6 +33,7 @@ uv_buf_t* kk_bytes_to_uv_buffs(kk_bytes_t bytes, kk_context_t* _ctx);
 
 void kk_handle_free(void* p, kk_block_t* block, kk_context_t* _ctx);
 void kk_uv_req_free(void* p, kk_block_t *block, kk_context_t *_ctx);
+void kk_hnd_callback_replace_bytes(kk_bytes_t *dest, kk_bytes_t replacement, kk_context_t* _ctx);
 
 #define kk_uv_exn_callback(callback, result) \
   kk_function_call(void, (kk_function_t, kk_std_core_exn__error, kk_context_t*), callback, (callback, result, kk_context()), kk_context());
@@ -74,6 +75,16 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 // Performs a single async request with a callback.
 // Allocates, installs and then tears down the request/callback if unsuccessful
 #define kk_uv_oneshot_req_setup(kk_callback_fn, req_t, uv_setup_fn, handle_t, handle, ...) \
+  kk_new_req_cb(req_t, req, kk_callback_fn); \
+  handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
+  int status = uv_setup_fn(req, uvhnd, __VA_ARGS__); \
+  if (status != UV_OK) { \
+    kk_callback_fn = kk_uv_req_into_callback((uv_handle_t*)uvhnd, _ctx); \
+    kk_uv_status_code_callback(kk_callback_fn, status); \
+  }
+
+// as above, but with a leading uvloop argument
+#define kk_uv_oneshot_req_uvloop_setup(kk_callback_fn, req_t, uv_setup_fn, handle_t, handle, ...) \
   kk_new_req_cb(req_t, req, kk_callback_fn); \
   handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
   int status = uv_setup_fn(req, uvhnd, __VA_ARGS__); \
@@ -128,7 +139,6 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 // }
 
 // Sets the data of the handle to point to the callback
-// TODO: Check if data is already assigned?
 static inline int kk_uv_hnd_data_create(kk_box_t internal, kk_function_t callback, kk_context_t* _ctx) {
   uv_handle_t* uvhnd = kk_cptr_unbox_borrowed(internal, _ctx);
   if (uvhnd->data != NULL) {
@@ -136,10 +146,21 @@ static inline int kk_uv_hnd_data_create(kk_box_t internal, kk_function_t callbac
   }
   kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context());
   uvhnd_cb->callback = callback;
+  // TODO: don't dup here? The caller should dup, as per koka rules
   uvhnd_cb->hnd = kk_box_dup(internal, _ctx);
   uvhnd_cb->bytes = kk_bytes_empty();
   uvhnd->data = uvhnd_cb;
   return UV_OK;
+}
+
+static inline void kk_uv_req_data_create(kk_box_t internal, kk_function_t callback, kk_bytes_t bytes, kk_context_t* _ctx) {
+  kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context());
+  uv_handle_t* uvhnd = kk_cptr_unbox_borrowed(internal, _ctx);
+  uvhnd_cb->callback = callback;
+  uvhnd_cb->hnd = internal;
+  uvhnd_cb->bytes = bytes;
+
+  uvhnd->data = uvhnd_cb;
 }
 
 // take a copy of the cb and drop the rest of the kk_uv_hnd_callback resource

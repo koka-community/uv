@@ -16,9 +16,6 @@ pub import std/num/int64
 pub import uv/utils
 
 extern import
-  c header-end-file "inline/file.h"
-
-extern import
   c file "inline/file.c"
 
 // A Koka representation of the timespec struct

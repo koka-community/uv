@@ -2,12 +2,35 @@
 #include "kklib/box.h"
 #include "uv_event_dash_loop.h"
 
+static kk_uv_file__fstat kk_uv_stat_from_uv_stat(uv_stat_t* uvstat, kk_context_t* _ctx) {
+  return kk_uv_file__new_Fstat(
+    kk_reuse_null,
+    0, // cpath
+    uvstat->st_dev,
+    uvstat->st_mode,
+    uvstat->st_nlink,
+    uvstat->st_uid,
+    uvstat->st_gid,
+    uvstat->st_rdev,
+    uvstat->st_ino,
+    uvstat->st_size,
+    uvstat->st_blksize,
+    uvstat->st_blocks,
+    uvstat->st_flags,
+    kk_uv_file__new_Timespec(uvstat->st_atim.tv_sec, uvstat->st_atim.tv_nsec, _ctx),
+    kk_uv_file__new_Timespec(uvstat->st_mtim.tv_sec, uvstat->st_mtim.tv_nsec, _ctx),
+    kk_uv_file__new_Timespec(uvstat->st_ctim.tv_sec, uvstat->st_ctim.tv_nsec, _ctx),
+    kk_uv_file__new_Timespec(uvstat->st_birthtim.tv_sec, uvstat->st_birthtim.tv_nsec, _ctx),
+    _ctx
+  );
+}
+
 
 void kk_free_fs(void* p, kk_block_t* block, kk_context_t* _ctx) {
-    uv_fs_t* req = (uv_fs_t*)p;
-    uv_fs_req_cleanup(req);
-    kk_info_message("Freeing fs request\n", kk_context());
-    kk_free(p, _ctx);
+  uv_fs_t* req = (uv_fs_t*)p;
+  uv_fs_req_cleanup(req);
+  kk_info_message("Freeing fs request\n", kk_context());
+  kk_free(p, _ctx);
 }
 
 #define kk_new_fs_req_cb(req, cb) kk_new_req_cb(uv_fs_t, req, cb)
@@ -82,7 +105,7 @@ static kk_std_core_exn__error kk_uv_fs_open_sync(kk_string_t path, int32_t flags
 
 static void kk_std_os_file_buff_cb(uv_fs_t* req) {
   kk_context_t* _ctx = kk_get_context();
-  kk_uv_hnd_callback_t* wrapper = (kk_uv_hnd_callback_t*)req->data;
+  kk_hnd_callback_t* wrapper = (kk_hnd_callback_t*)req->data;
   kk_function_t callback = wrapper->callback;
   kk_bytes_t bytes = wrapper->bytes;
   // kk_info_message("Clength %d", req->result);
@@ -101,19 +124,24 @@ static void kk_std_os_file_buff_cb(uv_fs_t* req) {
   }
 }
 
-static kk_unit_t kk_uv_fs_read(kk_uv_file__uv_file file, kk_bytes_t bytes, ssize_t offset, kk_function_t cb, kk_context_t* _ctx) {
+static void kk_uv_fs_read(kk_uv_file__uv_file file, kk_bytes_t bytes, ssize_t offset, kk_function_t cb, kk_context_t* _ctx) {
   uv_fs_t* fs_req = kk_malloc(sizeof(uv_fs_t), _ctx);
-  kk_uv_hnd_callback_t* wrapper = kk_new_uv_buff_callback(cb, bytes, (uv_handle_t*)fs_req, _ctx);
+  kk_box_t kk_fs_req = kk_uv_to_fs_box(fs_req);
+  kk_uv_req_data_create(kk_fs_req, cb, bytes, _ctx);
+
   uv_buf_t* uv_buffs = kk_malloc(sizeof(uv_buf_t)+1, _ctx);
-  uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, &uv_buffs[0].len, _ctx);
-  uv_fs_read(uvloop(), fs_req, (uv_file)file.internal, uv_buffs, 1, offset, kk_std_os_file_buff_cb);
-  return kk_Unit;
+  uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, (kk_ssize_t*) &uv_buffs[0].len, _ctx);
+  // TODO: how to free uv_buffs?
+  int status = uv_fs_read(uvloop(), fs_req, (uv_file)file.internal, uv_buffs, 1, offset, kk_std_os_file_buff_cb);
+  if (status != UV_OK) {
+    // TODO: callback with memory reclamaition
+  }
 }
 
 static kk_std_core_exn__error kk_uv_fs_read_sync(kk_uv_file__uv_file file, kk_bytes_t bytes, int32_t offset, kk_context_t* _ctx) {
   uv_fs_t fs_req = {0};
   uv_buf_t uv_buffs[1] = {0};
-  uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, &uv_buffs[0].len, _ctx);
+  uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, (kk_ssize_t*) &uv_buffs[0].len, _ctx);
   ssize_t result = uv_fs_read(uvloop(), &fs_req, (uv_file)file.internal, uv_buffs, 1, offset, NULL);
   if (result < 0) {
     kk_bytes_drop(bytes, _ctx);

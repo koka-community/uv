@@ -4,12 +4,10 @@
 void kk_uv_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   kk_context_t* _ctx = kk_get_context();
   kk_hnd_callback_t* uvcb = (kk_hnd_callback_t*)handle->data;
-  // drop previous entry
-  kk_bytes_drop(uvcb->bytes, _ctx);
-
+  
   // allocate a raw C buffer backing a kk_bytes struct,
   // and assign the kk_bytes struct to uvcb->bytes access in e.g. kk_uv_read_callback
-  uvcb->bytes = kk_bytes_alloc_cbuf(suggested_size, &buf->base, _ctx);
+  kk_hnd_callback_replace_bytes(&uvcb->bytes, kk_bytes_alloc_cbuf(suggested_size, &buf->base, _ctx), _ctx);
   buf->len = suggested_size;
 }
 
