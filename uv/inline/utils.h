@@ -96,6 +96,18 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
     uv_callback_fn(req); \
   }
 
+// Performs a single async request for the FS module.
+// TODO remove _box suffix and use this macro for all usages, just explicitly pass in NULL_BOX if needed
+#define kk_uv_oneshot_fs_setup_box(box, cb, uv_setup_fn, uv_callback_fn, drops, ...) \
+  kk_new_req(uv_fs_t, req); \
+  req->data = kk_uv_hnd_callback_create(box, cb, NULL_BYTES, _ctx); \
+  int status = uv_setup_fn(uvloop(), req, __VA_ARGS__, uv_callback_fn); \
+  do drops while (0); \
+  if (status != UV_OK) { \
+    req->result = status; \
+    uv_callback_fn(req); \
+  }
+
 // Implementation of a oneshot request callback.
 // Frees the request
 #define kk_uv_oneshot_req_callback(req, status) \

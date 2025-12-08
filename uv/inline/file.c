@@ -165,34 +165,9 @@ static void kk_uv_fs_closedir(kk_uv_file__uv_dir dir, kk_function_t cb, kk_conte
     (uv_dir_t*)dir.internal);
 }
 
-// TODO use handle instead?
-typedef struct kk_uv_dir_callback_s {
-  kk_function_t callback;
-  uv_dir_t* uvdir;
-} kk_uv_dir_callback_t;
-
-
-
-void kk_free_dir(void* p, kk_block_t* block, kk_context_t* _ctx) {
-  uv_dir_t* req = (uv_dir_t*)p;
-  kk_free(req->dirents);
-  kk_assert(req->data == NULL);
-  kk_free(p, _ctx);
-}
-
-// TODO: inline, it's only used once
-static inline kk_uv_dir_callback_t* kk_new_uv_dir_callback(kk_function_t cb, uv_handle_t* handle, uv_dir_t* uvdir, int32_t num_entries, kk_context_t* _ctx) {
-  kk_uv_dir_callback_t* c = kk_malloc(sizeof(kk_uv_dir_callback_t), _ctx);
-  c->callback = cb;
-  uvdir->dirents = kk_malloc(sizeof(uv_dirent_t)*500, _ctx);
-  uvdir->nentries = 500;
-  uvdir->data = NULL;
-  handle->data = c;
-  return c;
-}
-
 kk_box_t kk_uv_dirent_to_dirent(uv_dirent_t* dirent, kk_box_t* loc, kk_context_t* _ctx) {
   if (loc == NULL) {
+    // TODO: does this leak?
     loc = kk_malloc(sizeof(kk_box_t*), _ctx);
   }
   kk_string_t name = kk_string_alloc_raw((const char*) dirent->name, true, _ctx);
@@ -221,32 +196,43 @@ kk_vector_t kk_uv_dirents_to_vec(uv_dir_t* uvdir, kk_ssize_t num_entries, kk_con
   return dirents;
 }
 
-// TODO
 void kk_std_os_fs_readdir_cb(uv_fs_t* req) {
-  kk_context_t* _ctx = kk_get_context();
-  kk_uv_dir_callback_t* wrapper = (kk_uv_dir_callback_t*)req->data;
-  kk_function_t callback = wrapper->callback;
+  // awkwardly named to avoid the definition from the callback macro.
+  // TODO move out of macro?
+  kk_context_t* _ctx_unshadow = kk_get_context();
+  kk_hnd_callback_t* uvhnd_cb = (kk_hnd_callback_t*)req->data;
+  kk_box_t uvdir_box = uvhnd_cb->hnd;
   ssize_t result = req->result;
-  uv_dir_t* uvdir = wrapper->uvdir;
-  kk_free(wrapper, _ctx);
-  uv_fs_req_cleanup(req);
-  if (result < 0) {
-    kk_free(uvdir->dirents, _ctx);
-    kk_uv_error_callback(callback, result)
-  } else {
-    kk_vector_t dirents = kk_uv_dirents_to_vec(uvdir, (kk_ssize_t)result, _ctx);
-    kk_free(uvdir->dirents, _ctx);
-    kk_uv_okay_callback(callback, kk_vector_box(dirents, _ctx))
+  kk_uv_file__uv_dir uvdir = kk_uv_file__uv_dir_unbox(uvdir_box, KK_BORROWED, _ctx_unshadow);
+  uv_dir_t* uvdir_ptr = (uv_dir_t*)uvdir.internal;
+
+  kk_vector_t dirents;
+  if (req->result >= 0) {
+   dirents = kk_uv_dirents_to_vec(uvdir_ptr, (kk_ssize_t)req->result, _ctx_unshadow);
   }
+
+  if(uvdir_ptr->dirents != NULL) {
+    kk_free(uvdir_ptr->dirents, _ctx_unshadow);
+    uvdir_ptr->dirents = NULL;
+  }
+
+  kk_uv_oneshot_fs_callback1(req, kk_vector_box(dirents, _ctx));
 }
 
-// TODO
-static kk_unit_t kk_uv_fs_readdir(kk_uv_file__uv_dir dir, kk_function_t cb, kk_context_t* _ctx) {
-  uv_fs_t* fs_req = kk_malloc(sizeof(uv_fs_t), _ctx);
-  // Read up to 500 entries in the directory
-  kk_uv_dir_callback_t* wrapper = kk_new_uv_dir_callback(cb, (uv_handle_t*)fs_req, (uv_dir_t*) dir.internal, 500, _ctx);
-  uv_fs_readdir(uvloop(), fs_req, wrapper->uvdir, kk_std_os_fs_readdir_cb);
-  return kk_Unit;
+// TODO what happens if there are more than 500 dirents?
+static void kk_uv_fs_readdir(kk_uv_file__uv_dir dir, kk_function_t cb, kk_context_t* _ctx) {
+  uv_dir_t* uvdir = (uv_dir_t*) dir.internal;
+  if (uvdir->dirents != NULL) {
+    kk_uv_error_callback(cb, UV_EBUSY);
+  } else {
+    // Read up to 500 entries in the directory
+    uvdir->dirents = kk_malloc(sizeof(uv_dirent_t)*500, _ctx);
+    uvdir->nentries = 500;
+
+    kk_box_t dir_box = kk_uv_file__uv_dir_box(dir, _ctx);
+
+    kk_uv_oneshot_fs_setup_box(dir_box, cb, uv_fs_readdir, kk_std_os_fs_readdir_cb, {}, uvdir);
+  }
 }
 
 // TODO: remove this, single use is incorrect?
