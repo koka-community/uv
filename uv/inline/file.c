@@ -90,9 +90,9 @@ static void kk_std_os_file_buff_cb(uv_fs_t* req) {
 }
 
 static void kk_uv_fs_read(kk_uv_file__uv_file file, kk_bytes_t bytes, ssize_t offset, kk_function_t cb, kk_context_t* _ctx) {
-  uv_buf_t* uv_buffs = kk_malloc(sizeof(uv_buf_t)+1, _ctx);
+  // Create a single uv buffer that points to the memory address of `bytes`
+  uv_buf_t uv_buffs[1];
   uv_buffs[0].base = (char*)kk_bytes_cbuf_borrow(bytes, (kk_ssize_t*) &uv_buffs[0].len, _ctx);
-  // TODO: how to free uv_buffs?
   
   kk_uv_oneshot_fs_setup(cb, bytes, uv_fs_read, kk_std_os_file_buff_cb, {},
     // uv_read args
@@ -172,12 +172,21 @@ typedef struct kk_uv_dir_callback_s {
 } kk_uv_dir_callback_t;
 
 
+
+void kk_free_dir(void* p, kk_block_t* block, kk_context_t* _ctx) {
+  uv_dir_t* req = (uv_dir_t*)p;
+  kk_free(req->dirents);
+  kk_assert(req->data == NULL);
+  kk_free(p, _ctx);
+}
+
 // TODO: inline, it's only used once
 static inline kk_uv_dir_callback_t* kk_new_uv_dir_callback(kk_function_t cb, uv_handle_t* handle, uv_dir_t* uvdir, int32_t num_entries, kk_context_t* _ctx) {
   kk_uv_dir_callback_t* c = kk_malloc(sizeof(kk_uv_dir_callback_t), _ctx);
   c->callback = cb;
   uvdir->dirents = kk_malloc(sizeof(uv_dirent_t)*500, _ctx);
   uvdir->nentries = 500;
+  uvdir->data = NULL;
   handle->data = c;
   return c;
 }
