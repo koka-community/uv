@@ -235,24 +235,28 @@ static void kk_uv_fs_readdir(kk_uv_file__uv_dir dir, kk_function_t cb, kk_contex
   }
 }
 
-// TODO: remove this, single use is incorrect?
 void kk_free_fs(void* p, kk_block_t* block, kk_context_t* _ctx) {
   uv_fs_t* req = (uv_fs_t*)p;
-  // kk_uv_hnd_data_free(req);
+  kk_uv_hnd_data_free(req);
   uv_fs_req_cleanup(req);
-  kk_info_message("Freeing fs request\n", kk_context());
   kk_free(p, _ctx);
 }
 
 static void kk_std_os_fs_scandir_cb(uv_fs_t* req) {
   kk_uv_oneshot_fs_callback1(req,
-    // TODO: This is not correct, we don't want a new reference counted box here
-    uv_handle_to_owned_kk_handle_box(req, kk_free_fs, file, fs_req)
+    // return a reference to the original request, stored
+    // as the handle
+    kk_box_dup(((kk_hnd_callback_t*)req->data)->hnd, _ctx)
   );
 }
 
 static void kk_uv_fs_scandir(kk_string_t path, kk_function_t cb, kk_context_t* _ctx) {
-  kk_uv_oneshot_fs_setup_string(path, uv_fs_scandir, kk_std_os_fs_scandir_cb, 0);
+  kk_uv_oneshot_fs_setup_box(
+    uv_handle_to_owned_kk_handle_box(req, kk_free_fs, file, fs_req),
+    cb, uv_fs_scandir, kk_std_os_fs_scandir_cb,
+    { kk_string_drop(path, _ctx); },
+    kk_string_cbuf_borrow(path, NULL, 0), 0
+  );
 }
 
 static kk_std_core_exn__error kk_uv_fs_scandir_next(kk_uv_file__uv_fs_req req, kk_context_t* _ctx) {
