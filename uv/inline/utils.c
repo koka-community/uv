@@ -7,6 +7,7 @@ static kk_uv_utils__uv_status_code kk_uv_status_to_status_code(int32_t status, k
 void kk_handle_free(void *p, kk_block_t *block, kk_context_t *_ctx) {
     uv_handle_t *hnd = (uv_handle_t *)p;
     kk_uv_hnd_data_free(hnd);
+    // kk_warning_message("freeing handle of type %d\n", hnd->type);
     uv_close(hnd, NULL);
     // p will be freed by uv.
 }
@@ -22,6 +23,7 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx) {
 kk_function_t kk_uv_hnd_callback_into_callback(kk_hnd_callback_t* hndcb, kk_context_t* _ctx) {
   kk_function_t callback = hndcb->callback;
   kk_bytes_drop(hndcb->bytes, _ctx);
+  kk_box_drop(hndcb->hnd, _ctx);
   kk_free(hndcb, _ctx); // Free the memory used for the callback and box
   return callback;
 }

@@ -59,6 +59,7 @@ typedef struct  {
 void kk_uv_hnd_callback_free(kk_hnd_callback_t* hndcb, kk_context_t* _ctx);
 kk_function_t kk_uv_hnd_callback_into_callback(kk_hnd_callback_t* hndcb, kk_context_t* _ctx);
 kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
+kk_function_t kk_uv_hnd_callback_dup(kk_hnd_callback_t* hndcb, kk_context_t* _ctx);
 
 #define kk_uv_hnd_data_free(hnd) \
   if(hnd->data != NULL) { \
@@ -79,7 +80,7 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 #define kk_uv_oneshot_req_setup(kk_callback_fn, req_t, uv_setup_fn, handle_t, handle, ...) \
   kk_new_req_cb(req_t, req, kk_callback_fn); \
   handle_t* uvhnd = kk_owned_handle_to_uv_handle(handle_t, handle); \
-  int status = uv_setup_fn(req, uvhnd, __VA_ARGS__); \
+  int status = uv_setup_fn(req, uvhnd __VA_OPT__(,) __VA_ARGS__); \
   if (status != UV_OK) { \
     kk_callback_fn = kk_uv_req_into_callback((uv_handle_t*)uvhnd, _ctx); \
     kk_uv_status_code_callback(kk_callback_fn, status); \
@@ -89,7 +90,7 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 #define kk_uv_oneshot_fs_setup(cb, bytes, uv_setup_fn, uv_callback_fn, drops, ...) \
   kk_new_req(uv_fs_t, req); \
   req->data = kk_uv_hnd_callback_create(NULL_BOX, cb, bytes, _ctx); \
-  int status = uv_setup_fn(uvloop(), req, __VA_ARGS__, uv_callback_fn); \
+  int status = uv_setup_fn(uvloop(), req __VA_OPT__(,) __VA_ARGS__, uv_callback_fn); \
   do drops while (0); \
   if (status != UV_OK) { \
     req->result = status; \
@@ -101,7 +102,7 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
 #define kk_uv_oneshot_fs_setup_box(box, cb, uv_setup_fn, uv_callback_fn, drops, ...) \
   kk_new_req(uv_fs_t, req); \
   req->data = kk_uv_hnd_callback_create(box, cb, NULL_BYTES, _ctx); \
-  int status = uv_setup_fn(uvloop(), req, __VA_ARGS__, uv_callback_fn); \
+  int status = uv_setup_fn(uvloop(), req __VA_OPT__(,) __VA_ARGS__, uv_callback_fn); \
   do drops while (0); \
   if (status != UV_OK) { \
     req->result = status; \
@@ -114,19 +115,6 @@ kk_function_t kk_uv_req_into_callback(uv_handle_t *hnd, kk_context_t *_ctx);
   kk_uv_req_get_callback(req, callback); \
   kk_uv_status_code_callback(callback, status); \
   kk_free(req, kk_context());
-
-// #define kk_uv_oneshot_req_callback1(req, status, arg_t, errval, set_result, drops) \
-//   kk_uv_req_get_callback(req, callback); \
-//   if (status < UV_OK) { \
-//     do drops while (0); \
-//     kk_function_call(void, (kk_function_t, arg_t, kk_context_t*), callback, (callback, errval, _ctx), _ctx); \
-//   } else { \
-//     arg_t result; \
-//     do set_result while (0); \
-//     do drops while (0); \
-//     kk_function_call(void, (kk_function_t, arg_t, kk_context_t*), callback, (callback, result, _ctx), _ctx); \
-//   } \
-//   kk_free(req, kk_context());
 
 // Implementation of a oneshot handle callback.
 // Removes the `data` cb struct from the handle.
@@ -197,9 +185,10 @@ static inline int kk_uv_hnd_data_create(kk_box_t internal, kk_function_t callbac
   }
   kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context());
   uvhnd_cb->callback = callback;
-  // TODO: don't dup here? The caller should dup, as per koka rules
-  uvhnd_cb->hnd = kk_box_dup(internal, _ctx);
+  uvhnd_cb->hnd = internal;
   uvhnd_cb->bytes = NULL_BYTES;
+  // kk_warning_message("allocated kk_hnd @ %p, assigned to data field of handle %p (type %d)",
+    // uvhnd_cb, uvhnd, uvhnd->type);
   uvhnd->data = uvhnd_cb;
   return UV_OK;
 }
@@ -228,14 +217,10 @@ static inline kk_function_t kk_uv_hnd_data_take_cb(uv_handle_t *uvhnd, kk_contex
   kk_uv_hnd_data_take_cb(kk_cptr_unbox_borrowed(wrapper.internal, kk_context()), kk_context());
 
 // Sets the data of the handle to point to the callback
-// TODO: Check if data is already assigned?
-// TODO: remove usage, this doesn't dup handle nor check for leaked operations
 #define kk_set_hnd_cb(hnd_t, handle, uvhnd, callback) \
   hnd_t* uvhnd = kk_owned_handle_to_uv_handle(hnd_t, handle); \
-  kk_hnd_callback_t* uvhnd_cb = kk_malloc(sizeof(kk_hnd_callback_t), kk_context()); \
-  uvhnd_cb->callback = callback; \
-  uvhnd_cb->hnd = handle.internal; \
-  uvhnd->data = uvhnd_cb;
+  kk_uv_hnd_data_free(uvhnd); \
+  uvhnd->data = kk_uv_hnd_callback_create(handle.internal, callback, NULL_BYTES, _ctx);
 
 // TODO is kk_hnd actually needed/used? The caller will need to free it
 // consider kk_uv_hnd_data_take_cb instead
@@ -280,6 +265,13 @@ static inline kk_function_t kk_uv_hnd_data_take_cb(uv_handle_t *uvhnd, kk_contex
 // Check the uv status code and return a kk_std_core_exn__error Error if unsuccessful. Continue on success
 #define kk_uv_check_bail(err) \
   if (err < UV_OK) { \
+    return kk_async_error_from_errno(err, kk_context()); \
+  }
+
+// As above with drops
+#define kk_uv_check_bail_drops(err, drops) \
+  if (err < UV_OK) { \
+    do drops while (0); \
     return kk_async_error_from_errno(err, kk_context()); \
   }
 

@@ -5,11 +5,13 @@
 static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
   uv_file files[2];
 
+  int status = uv_pipe(files, 0, 0);
+  kk_uv_check_bail(status);
+
   uv_pipe_t* readable = kk_malloc(sizeof(uv_pipe_t), _ctx);;
   uv_pipe_t* writable = kk_malloc(sizeof(uv_pipe_t), _ctx);
-
-  int status = uv_pipe(files, 0, 0);
-  kk_uv_check_bail_drops(status, free_readable_and_writable);
+  readable->data = NULL;
+  writable->data = NULL;
 
   status = uv_pipe_init(uvloop(), readable, 0);
   kk_uv_check_bail_drops(status, free_readable_and_writable);

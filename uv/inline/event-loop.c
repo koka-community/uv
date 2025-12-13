@@ -61,25 +61,22 @@ static void kk_uv_loop_init(kk_context_t* _ctx) {
   loop->data = kk_context();
 }
 
-void kk_uv_loop_run(kk_context_t* _ctx){
+kk_uv_status_code_t kk_uv_loop_run(kk_context_t* _ctx){
   // Run the event loop after the initial startup of the program
-  int ret = uv_run(uvloop(), UV_RUN_DEFAULT);
-  if (ret != 0){
-    kk_warning_message("Event loop closed with status %s\n", uv_err_name(ret));
-  }
+  return kk_uv_status_code(uv_run(uvloop(), UV_RUN_DEFAULT));
 }
 
-static void kk_uv_loop_close(kk_context_t* _ctx) {
+static kk_uv_status_code_t kk_uv_loop_close(kk_context_t* _ctx) {
   int ret = uv_loop_close(uvloop());
-  if (ret != 0) {
-    kk_warning_message("Event loop closed %s\n", uv_err_name(ret));
-  }
   kk_free(uvloop(), _ctx);
+  return kk_uv_status_code(ret);
 }
 
 static void kk_uv_close(kk_uv_utils__uv_handle handle, kk_function_t callback, kk_context_t* _ctx) {
-  kk_set_hnd_cb(uv_handle_t, handle, uvhnd, callback)
-  return uv_close(uvhnd, kk_uv_handle_close_callback);
+  uv_handle_t* uvhnd_dbg = kk_owned_handle_to_uv_handle(uv_handle_t, handle);
+  // kk_warning_message("Closing handle of type %d with old_data=%p\n", uvhnd_dbg->type, uvhnd_dbg->data);
+  kk_set_hnd_cb(uv_handle_t, handle, uvhnd, callback);
+  uv_close(uvhnd, kk_uv_handle_close_callback);
 }
 
 #endif
@@ -102,7 +99,7 @@ static void kk_async_loop_init(kk_context_t* _ctx) {
   #endif
 }
 
-void kk_async_loop_run(kk_context_t* _ctx){
+kk_uv_status_code_t kk_async_loop_run(kk_context_t* _ctx){
   // Run the event loop after the initial startup of the program
   #if __EMSCRIPTEN__
     return kk_emscripten_loop_run(_ctx);
@@ -112,7 +109,7 @@ void kk_async_loop_run(kk_context_t* _ctx){
   
 }
 
-static void kk_async_loop_close(kk_context_t* _ctx) {
+static kk_uv_status_code_t kk_async_loop_close(kk_context_t* _ctx) {
   #if __EMSCRIPTEN__
     return kk_Unit;
   #else 

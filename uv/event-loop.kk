@@ -14,6 +14,7 @@ pub import uv/utils
 pub import uv/timer
 pub import std/async/async
 import std/num/int32
+import std/core-extras
 
 extern import
   c { conan="libuv[>=1.47.0]"; vcpkg="libuv"; library="uv" }
@@ -53,16 +54,21 @@ pub fun default-event-loop(action)
 // Configures uv with Koka's allocators when importing this file
 val @initialize = init-uv-alloc()
 
-// Runs a UV loop
+fun abort-unless-ok(status, desc)
+  if !status.is-uv_OK then
+    println("[uv/event-loop] " ++ desc ++ " error: " ++ status.show ++ " (" ++ status.message ++ ")")
+    exit(1)
+
+// Runs a UV loop. Aborts on error
 fun handle-loop(action)
   init-loop()
   val res = action()
-  run-loop()
-  close-loop()
+  abort-unless-ok(run-loop(), "run-loop")
+  abort-unless-ok(close-loop(), "close-loop")
   res
 
 // Runs a uv loop (or the emscripten loop on wasm)
-extern run-loop(): io-noexn ()
+extern run-loop(): io-noexn uv-status-code
   c "kk_async_loop_run"
   js inline ""
   cs inline ""
@@ -81,7 +87,7 @@ pub extern init-uv-alloc(): ()
   js inline ""
 
 // Closes a uv loop
-extern close-loop(): io-noexn ()
+extern close-loop(): io-noexn uv-status-code
   c "kk_async_loop_close"
   cs inline ""
   js inline ""
