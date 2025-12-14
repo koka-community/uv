@@ -230,6 +230,12 @@ static inline kk_function_t kk_uv_hnd_data_take_cb(uv_handle_t *uvhnd, kk_contex
   kk_box_t kk_hnd = hndcb->hnd; \
   kk_function_t callback = hndcb->callback;
 
+#define kk_uv_hnd_dup_callback(handle, kk_hnd, callback) \
+  kk_hnd_callback_t* hndcb = (kk_hnd_callback_t*)handle->data; \
+  handle->data = NULL; \
+  kk_box_t kk_hnd = hndcb->hnd; \
+  kk_function_t callback = kk_function_dup(hndcb->callback, _ctx);
+
 // TODO: Should I get the ctx from the loop?
 // TODO: rename copy_callback or something to indicate reuse
 #define kk_uv_hnd_get_callback(handle, kk_hnd, callback) \

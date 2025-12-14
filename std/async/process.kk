@@ -3,6 +3,7 @@ module std/async/process
 // Note: importing std/async causes clash with set-timeout / clear-timeout
 import std/async/async
 import uv/process
+import uv/pipe
 import uv/signal
 import std/stream
 import std/num/int32
@@ -250,13 +251,23 @@ pub fun output-stream(process: process): exn io-stream
 pub fun stderr-stream(process: process): exn io-stream
   process.output-streams.stderr.require("stderr")
 
-pub fun output(process: process): <asyncx> string
+pub fun output-bytes(process: process): <io,async> bytes
   process.output-stream.read-all()
 
-pub fun stderr-output(process: process): <asyncx> string
+pub fun output(process: process): <io,async> string
+  process.output-bytes.string
+
+pub fun stderr-output-bytes(process: process): <io,async> bytes
   process.stderr-stream.read-all()
 
-pub fun outputs(process: process): <asyncx> (string, string)
+pub fun stderr-output(process: process): <io,async> string
+  process.stderr-output-bytes.string
+
+pub fun outputs-bytes(process: process): <io,async> (bytes, bytes)
   val out = process.output-stream()
   val err = process.stderr-stream()
   interleaved({ out.read-all() }, { err.read-all() })
+
+pub fun outputs(process: process): <io,async> (string, string)
+  val (out, err) = process.outputs-bytes
+  (out.string, err.string)
