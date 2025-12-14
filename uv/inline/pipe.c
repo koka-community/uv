@@ -16,6 +16,9 @@ static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
   status = uv_pipe_init(uvloop(), readable, 0);
   kk_uv_check_bail_drops(status, free_readable_and_writable);
 
+  // TODO: after opening a pipe (or even initting it?)
+  // it must be closed. Note that closing is async, so
+  // we can't free the struct until after that point.
   status = uv_pipe_open(readable, files[0]);
   kk_uv_check_bail_drops(status, free_readable_and_writable);
 

@@ -3,6 +3,7 @@
 #define kk_unbox_process_borrowed(kk_process) \
   (kk_uv_process_wrapper_t*)kk_cptr_raw_unbox_borrowed(kk_process.internal, _ctx)
 
+// TODO should we just use the same approach as utils?
 typedef struct kk_uv_process_wrapper_s {
   uv_process_t process;
   kk_function_t on_exit;
