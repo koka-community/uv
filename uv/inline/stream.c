@@ -1,5 +1,3 @@
-// #include "std_os_stream.h"
-#include "uv_event_dash_loop.h"
 
 void kk_uv_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   kk_context_t* _ctx = kk_get_context();
@@ -108,46 +106,3 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__list 
     uv_stream_t, stream, uv_buffs, list_len, kk_uv_write_callback
   )
 }
-
-static void kk_uv_write2(kk_uv_stream__uv_stream stream, kk_std_core_types__list buffs, kk_uv_stream__uv_stream send_handle, kk_function_t cb, kk_context_t* _ctx){
-  int list_len;
-  const uv_buf_t* uv_buffs = kk_bytes_list_to_uv_buffs(buffs, &list_len, _ctx);
-
-  // TODO: persist bufs somewhere the handler can free them
-  kk_uv_oneshot_req_setup(cb,
-    uv_write_t, uv_write2,
-    uv_stream_t, stream, uv_buffs, list_len, kk_owned_handle_to_uv_handle(uv_stream_t, send_handle), kk_uv_write_callback
-  )
-}
-
-static int32_t kk_uv_try_write(kk_uv_stream__uv_stream stream, kk_std_core_types__list buffs, kk_context_t* _ctx){
-  int list_len;
-  const uv_buf_t* uv_buffs = kk_bytes_list_to_uv_buffs(buffs, &list_len, _ctx);
-  int32_t status = uv_try_write(kk_owned_handle_to_uv_handle(uv_stream_t, stream), uv_buffs, list_len);
-  // TODO free buffers
-  return status;
-}
-
-static int32_t kk_uv_try_write2(kk_uv_stream__uv_stream stream, kk_std_core_types__list buffs, kk_uv_stream__uv_stream send_handle, kk_context_t* _ctx){
-  int list_len;
-  const uv_buf_t* uv_buffs = kk_bytes_list_to_uv_buffs(buffs, &list_len, _ctx);
-  int status = uv_try_write2(kk_owned_handle_to_uv_handle(uv_stream_t, stream), uv_buffs, list_len, kk_owned_handle_to_uv_handle(uv_stream_t, send_handle));
-  // TODO free buffers
-  return status;
-}
-
-// static int32_t kk_uv_is_readable(kk_uv_stream__uv_stream stream, kk_context_t* _ctx){
-//   return uv_is_readable(kk_owned_handle_to_uv_handle(uv_stream_t, stream));
-// }
-
-// static int32_t kk_uv_is_writable(kk_uv_stream__uv_stream stream, kk_context_t* _ctx){
-//   return uv_is_writable(kk_owned_handle_to_uv_handle(uv_stream_t, stream));
-// }
-
-// static kk_uv_utils__uv_status_code kk_uv_stream_set_blocking(kk_uv_stream__uv_stream stream, bool blocking, kk_context_t* _ctx){
-//   return kk_uv_utils_int_fs_status_code(uv_stream_set_blocking(kk_owned_handle_to_uv_handle(uv_stream_t, stream), blocking), _ctx);
-// }
-
-// static int32_t kk_uv_stream_get_write_queue_size(kk_uv_stream__uv_stream stream, kk_context_t* _ctx){
-//   return uv_stream_get_write_queue_size(kk_owned_handle_to_uv_handle(uv_stream_t, stream));
-// }

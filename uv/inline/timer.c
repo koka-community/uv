@@ -42,16 +42,3 @@ void kk_uv_timer_start(kk_uv_timer__timer t, int64_t timeout, int64_t repeat, kk
     kk_status_callback(callback, status, _ctx);
   }
 }
-
-// kk_box_t kk_uv_set_timeout(kk_function_t cb, int64_t time, kk_context_t* _ctx) {
-//   kk_uv_timer__timer t = kk_uv_timer_timer_init(_ctx);
-//   kk_uv_timer_timer_start(t, time, 0, cb, _ctx);
-//   return kk_uv_timer__timer_box(t, _ctx);
-// }
-
-// kk_unit_t kk_uv_clear_timeout(kk_box_t boxed_timer, kk_context_t* _ctx) {
-//   kk_uv_timer__timer timer = kk_uv_timer__timer_unbox(boxed_timer, KK_OWNED, _ctx);
-//   kk_uv_timer_timer_stop(timer, _ctx);
-//   return kk_Unit;
-// }
-

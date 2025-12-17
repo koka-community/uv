@@ -9,11 +9,11 @@
 // Provides low level file operations using libuv callbacks
 module uv/file
 
-pub import uv/event-loop
 pub import std/core/bytes
 pub import std/num/int32
 pub import std/num/int64
-pub import uv/utils
+pub import uv/core
+import std/core-extras // for `is-ref-unique`
 
 extern import
   c file "inline/file.c"
@@ -64,7 +64,7 @@ pub struct statfs
 pub fun statfs/show(f: statfs): string
   "{filetype=" ++ f.filetype.show ++ ", bsize=" ++ f.bsize.show ++ ", blocks=" ++ f.blocks.show ++ ", bfree=" ++
   f.bfree.show ++ ", bavail=" ++ f.bavail.show ++ ", files=" ++ f.files.show ++ ", ffree=" ++ f.ffree.show ++
-  ", fspare=[" ++ f.fspare.map(fn(s) s.show).list.join(",") ++ "]}"
+  ", fspare=[" ++ f.fspare.vector/map(fn(s) s.int64/show).list.join(",") ++ "]}"
 
 // Directory entry types
 pub type dirent-type
@@ -185,9 +185,13 @@ pub value struct uv-file { internal : intptr_t };
 // A uv directory type
 pub value struct uv-dir { internal : intptr_t };
 
-// Equivalent to close(2)
-pub extern uv/close(file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_close"
+// Checks that the given file is the last unique reference
+// and thus will be closed, otherwise returns UV_EBUSY
+pub fun uv/close(file: uv-file): io-noexn uv-status-code
+  if is-ref-unique(file.internal) then
+    UV_OK
+  else
+    UV_EBUSY
 
 // Equivalent to open(2).
 // WARNING: On Windows libuv uses CreateFileW and thus the file is always opened in binary mode. Because of this the O_BINARY and O_TEXT flags are not supported.
@@ -201,135 +205,135 @@ pub fun open(path: string, flags: int32, cb: (error<uv-file>) -> io-noexn (), mo
 
 
 
-// Equivalent to preadv(2). If the offset argument is -1, then the current file offset is used and updated.
-// WARNING: On Windows, under non-MSVC environments (e.g. when GCC or Clang is used to build libuv), files opened using UV_FS_O_FILEMAP may cause a fatal crash if the memory mapped read operation fails.
-pub fun uv/read(file: uv-file, length: int32, offset: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
-  uv/read-buf(file, alloc(length.int.ssize_t), offset, cb)
+// // Equivalent to preadv(2). If the offset argument is -1, then the current file offset is used and updated.
+// // WARNING: On Windows, under non-MSVC environments (e.g. when GCC or Clang is used to build libuv), files opened using UV_FS_O_FILEMAP may cause a fatal crash if the memory mapped read operation fails.
+// pub fun uv/read(file: uv-file, length: int32, offset: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
+//   uv/read-buf(file, alloc(length.int.ssize_t), offset, cb)
 
-pub extern uv/read-buf(file: uv-file, bytes: bytes, offset: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_read"
+// pub extern uv/read-buf(file: uv-file, bytes: bytes, offset: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_read"
 
-// Convenience function for reading with offset of 0
-pub fun basic/read(file: uv-file, length: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
-  read(file, length, 0.int32, cb)
+// // Convenience function for reading with offset of 0
+// pub fun basic/read(file: uv-file, length: int32, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
+//   read(file, length, 0.int32, cb)
 
-// Like read but providing a bytes buffer to allocate into.
-// If the buffer is unique reuse the buffer, otherwise allocate
-// pub fun uv/readbuf(file: uv-file, length: ssize_t, offset: int32, bytes: bytes, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
-//   if bytes.is-unique && bytes.length >= length then // TODO: Determine based off of length & bytes or just bytes? Or have another API?
-//      // Should we prevent data leakage, by zeroing the bytes?
-//      uv/read-buf(file, length, offset, bytes, cb)
-//   else
-//      uv/read-buf(file, length, offset, alloc(length), cb)
+// // Like read but providing a bytes buffer to allocate into.
+// // If the buffer is unique reuse the buffer, otherwise allocate
+// // pub fun uv/readbuf(file: uv-file, length: ssize_t, offset: int32, bytes: bytes, cb: (error<(bytes, int)>) -> io-noexn ()): io-noexn ()
+// //   if bytes.is-unique && bytes.length >= length then // TODO: Determine based off of length & bytes or just bytes? Or have another API?
+// //      // Should we prevent data leakage, by zeroing the bytes?
+// //      uv/read-buf(file, length, offset, bytes, cb)
+// //   else
+// //      uv/read-buf(file, length, offset, alloc(length), cb)
 
-pub extern unlink(path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_unlink"
+// pub extern unlink(path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_unlink"
 
-pub extern write(file: uv-file, data: bytes, offset: int64, cb: (error<int>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_write"
+// pub extern write(file: uv-file, data: bytes, offset: int64, cb: (error<int>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_write"
 
-pub extern mkdir(path: string, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_mkdir"
+// pub extern mkdir(path: string, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_mkdir"
 
-pub extern mkdtemp(path: string, cb: (error<string>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_mkdtemp"
+// pub extern mkdtemp(path: string, cb: (error<string>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_mkdtemp"
 
-pub extern mkstemp(path: string, cb: (error<(uv-file, string)>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_mkstemp"
+// pub extern mkstemp(path: string, cb: (error<(uv-file, string)>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_mkstemp"
 
-pub extern rmdir(path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_rmdir"
+// pub extern rmdir(path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_rmdir"
 
-pub extern opendir(path: string, cb: (error<uv-dir>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_opendir"
+// pub extern opendir(path: string, cb: (error<uv-dir>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_opendir"
 
-pub extern closedir(dir: uv-dir, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_closedir"
+// pub extern closedir(dir: uv-dir, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_closedir"
 
-pub extern readdir(dir: uv-dir, cb: (error<vector<dirent>>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_readdir"
+// pub extern readdir(dir: uv-dir, cb: (error<vector<dirent>>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_readdir"
 
-pub extern scandir(path: string, cb: (error<uv-fs-req>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_scandir"
+// pub extern scandir(path: string, cb: (error<uv-fs-req>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_scandir"
 
-pub extern scandir-next(req: uv-fs-req): io-noexn error<dirent>
-  c "kk_uv_fs_scandir_next"
+// pub extern scandir-next(req: uv-fs-req): io-noexn error<dirent>
+//   c "kk_uv_fs_scandir_next"
 
-pub extern stat(path: string, cb: (error<fstat>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_stat"
+// pub extern stat(path: string, cb: (error<fstat>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_stat"
 
-pub extern fstat(path: uv-file, cb: (error<fstat>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_fstat"
+// pub extern fstat(path: uv-file, cb: (error<fstat>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_fstat"
 
-// Returns the same as stat(), except that if the path is a symbolic link, it returns information about the link itself
-pub extern lstat(path: string, cb: (error<fstat>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_lstat"
+// // Returns the same as stat(), except that if the path is a symbolic link, it returns information about the link itself
+// pub extern lstat(path: string, cb: (error<fstat>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_lstat"
 
-pub extern rename(path: string, new_path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_rename"
+// pub extern rename(path: string, new_path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_rename"
 
-pub extern fsync(file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_fsync"
+// pub extern fsync(file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_fsync"
 
-pub extern fdatasync(file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_fdatasync"
+// pub extern fdatasync(file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_fdatasync"
 
-pub extern ftruncate(file: uv-file, offset: int64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_ftruncate"
+// pub extern ftruncate(file: uv-file, offset: int64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_ftruncate"
 
-pub val uv_fs_COPYFILE_EXCL = uv_fs_COPYFILE_EXCL_()
-extern uv_fs_COPYFILE_EXCL_(): int32
-  c inline "UV_FS_COPYFILE_EXCL"
+// pub val uv_fs_COPYFILE_EXCL = uv_fs_COPYFILE_EXCL_()
+// extern uv_fs_COPYFILE_EXCL_(): int32
+//   c inline "UV_FS_COPYFILE_EXCL"
 
-pub val uv_fs_COPYFILE_FICLONE = uv_fs_COPYFILE_FICLONE_()
-extern uv_fs_COPYFILE_FICLONE_(): int32
-  c inline "UV_FS_COPYFILE_FICLONE"
+// pub val uv_fs_COPYFILE_FICLONE = uv_fs_COPYFILE_FICLONE_()
+// extern uv_fs_COPYFILE_FICLONE_(): int32
+//   c inline "UV_FS_COPYFILE_FICLONE"
 
-pub val uv_fs_COPYFILE_FICLONE_FORCE = uv_fs_COPYFILE_FICLONE_FORCE_()
-extern uv_fs_COPYFILE_FICLONE_FORCE_(): int32
-  c inline "UV_FS_COPYFILE_FICLONE_FORCE"
+// pub val uv_fs_COPYFILE_FICLONE_FORCE = uv_fs_COPYFILE_FICLONE_FORCE_()
+// extern uv_fs_COPYFILE_FICLONE_FORCE_(): int32
+//   c inline "UV_FS_COPYFILE_FICLONE_FORCE"
 
-pub extern copyfile(path: string, new_path: string, flags: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_copyfile"
+// pub extern copyfile(path: string, new_path: string, flags: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_copyfile"
 
-pub extern sendfile(out_file: uv-file, in_file: uv-file, in_offset: int64, length: ssize_t, cb: (error<int>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_sendfile"
+// pub extern sendfile(out_file: uv-file, in_file: uv-file, in_offset: int64, length: ssize_t, cb: (error<int>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_sendfile"
 
-pub extern access(path: string, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_access"
+// pub extern access(path: string, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_access"
 
-pub extern chmod(path: string, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_chmod"
+// pub extern chmod(path: string, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_chmod"
 
-pub extern fchmod(file: uv-file, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_fchmod"
+// pub extern fchmod(file: uv-file, mode: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_fchmod"
 
-pub extern utime(path: string, atime: float64, mtime: float64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_utime"
+// pub extern utime(path: string, atime: float64, mtime: float64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_utime"
 
-pub extern futime(file: uv-file, atime: float64, mtime: float64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_futime"
+// pub extern futime(file: uv-file, atime: float64, mtime: float64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_futime"
 
-pub extern lutime(path: string, atime: float64, mtime: float64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_lutime"
+// pub extern lutime(path: string, atime: float64, mtime: float64, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_lutime"
 
-pub extern link(path: string, new_path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_link"
+// pub extern link(path: string, new_path: string, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_link"
 
-pub extern symlink(path: string, new_path: string, flags: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_symlink"
+// pub extern symlink(path: string, new_path: string, flags: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_symlink"
 
-pub extern readlink(path: string, cb: (error<string>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_readlink"
+// pub extern readlink(path: string, cb: (error<string>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_readlink"
 
-pub extern realpath(path: string, cb: (error<string>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_realpath"
+// pub extern realpath(path: string, cb: (error<string>) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_realpath"
 
-pub extern chown(path: string, uid: int32, gid: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_chown"
+// pub extern chown(path: string, uid: int32, gid: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_chown"
 
-pub extern fchown(file: uv-file, uid: int32, gid: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_fchown"
+// pub extern fchown(file: uv-file, uid: int32, gid: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_fchown"
 
-pub extern lchown(path: string, uid: int32, gid: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_lchown"
+// pub extern lchown(path: string, uid: int32, gid: int32, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+//   c "kk_uv_fs_lchown"

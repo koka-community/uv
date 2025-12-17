@@ -41,13 +41,13 @@ static void kk_uv_loop_init(kk_context_t* _ctx) {
 
 kk_uv_status_code_t kk_uv_loop_run(kk_context_t* _ctx){
   // Run the event loop after the initial startup of the program
-  return kk_uv_status_code(uv_run(uvloop(), UV_RUN_DEFAULT));
+  return kk_uv_status_code(uv_run(uvloop(), UV_RUN_DEFAULT), _ctx);
 }
 
 static kk_uv_status_code_t kk_uv_loop_close(kk_context_t* _ctx) {
   int ret = uv_loop_close(uvloop());
   kk_free(uvloop(), _ctx);
-  return kk_uv_status_code(ret);
+  return kk_uv_status_code(ret, _ctx);
 }
 
 // general handler utilities
