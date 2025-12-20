@@ -29,7 +29,7 @@ void kk_uv_timer_unit_callback(uv_timer_t* uv_timer) {
   } else {
     callback = kk_uv_handle_dup_callback(hnd, _ctx);
   }
-  kk_status_callback(callback, UV_OK, _ctx);
+  kk_status_code_callback(callback, UV_OK, _ctx);
 }
 
 void kk_uv_timer_start(kk_uv_timer__timer t, int64_t timeout, int64_t repeat, kk_function_t callback, kk_context_t* _ctx) {
@@ -39,6 +39,6 @@ void kk_uv_timer_start(kk_uv_timer__timer t, int64_t timeout, int64_t repeat, kk
   int status = uv_timer_start(&timer->uv, kk_uv_timer_unit_callback, timeout, repeat);
   if (status != UV_OK) {
     callback = kk_uv_handle_take_callback(hnd);
-    kk_status_callback(callback, status, _ctx);
+    kk_status_code_callback(callback, status, _ctx);
   }
 }
