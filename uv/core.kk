@@ -2,6 +2,7 @@
 module uv/core
 pub import uv/status-code
 import std/core-extras
+import std/num/int32
 
 extern import
   c { conan="libuv[>=1.47.0]"; vcpkg="libuv"; library="uv" }
@@ -44,3 +45,15 @@ extern init-loop(): io-noexn ()
 
 // The base uv handle type
 pub value struct uv-handle { internal: any }
+
+// Checks that the given handle is the last unique reference
+// and thus will be closed, otherwise returns UV_EBUSY
+pub fun close-handle(hnd: uv-handle): io-noexn uv-status-code
+  if is-ref-unique(hnd.internal) then
+    UV_OK
+  else
+    println("REFCOUNT: " ++ hnd.internal.get-refcount.show)
+    UV_EBUSY
+
+extern get-refcount(hnd: any): int32
+  c inline "kk_block_refcount(kk_box_to_ptr(#1, kk_context()))"

@@ -1,4 +1,3 @@
-declare_uv_struct(uv_stream, kk_uv_free_fn);
 declare_uv_struct(uv_write, kk_uv_free_fn);
 
 void kk_uv_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
@@ -91,6 +90,7 @@ static void kk_uv_write_callback(uv_write_t* write, int status){
   // free the input data and the request
   kk_uv_bufs_t* bufs = (kk_uv_bufs_t*)write->data;
   kk_uv_bufs_drop(bufs, _ctx);
+  kk_warning_message("dropping write %p after status %d\n", kk_hnd, status);
   kk_uv_drop(kk_hnd, _ctx);
 
   kk_status_code_callback(callback, status, _ctx);
@@ -107,8 +107,13 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
 
   kk_uv_stream_t* uv_stream = kk_uv_stream_unbox_borrowed(stream.internal, _ctx);
   int status = uv_write(&write->uv, &uv_stream->uv, kk_uv_bufs->uv_bufs, num_bufs, kk_uv_write_callback);
+  // uv_write doesn't requre cleanup on failure, in fact it can fail without initializing the uv_write_t struct
   if (status != UV_OK) {
-    // invoke the UV callback to ensure correct cleanup
-    kk_uv_write_callback(&write->uv, status);
+    // Note: `write` may not have been initialized, so we can't invoke kk_uv_write_callback
+    // TODO: track initialization so that kk_uv_drop will do the right thing?
+    kk_warning_message("uv_write returned %d\n", status);
+    kk_uv_bufs_drop(kk_uv_bufs, _ctx);
+    cb = kk_uv_handle_take_callback(uv_hnd);
+    kk_status_code_callback(cb, status, _ctx);
   }
 }

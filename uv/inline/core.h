@@ -100,6 +100,7 @@ declare_uv_struct_base(uv_handle);
   static kk_uv_handle_t* kk_##uv_type##_as_handle(kk_##uv_type##_t* p) { \
     return (kk_uv_handle_t*)p; \
   } \
+  __attribute__((unused)) \
   static kk_uv_handle_t* uv_type##_as_kk_handle(uv_type##_t* p) { \
     return kk_##uv_type##_as_handle(uv_type##_as_kk(p)); \
   } \
@@ -116,6 +117,7 @@ declare_uv_struct_base(uv_handle);
 #define malloc_and_init_raw(uv_type, hnd, status, ...) \
   kk_##uv_type##_t* hnd = kk_malloc(sizeof(kk_##uv_type##_t), _ctx); \
   status = uv_type##_init(__VA_ARGS__); \
+  kk_warning_message("init (%s_init) returned %x (type=%x)\n", #uv_type, status, hnd->uv.type); \
   if (status != UV_OK) { \
     kk_free(hnd, _ctx); \
   }
@@ -161,6 +163,7 @@ declare_uv_struct_base(uv_handle);
 #define kk_uv_setup_callback(uv_t, hnd, status, cb, call_uv_expr, on_error, drops) \
   status = call_uv_expr; \
   if (status != UV_OK) { \
+    kk_warning_message("kk_uv_setup_callback status=%d\n", status); \
     kk_uv_handle_t* raw_hnd = kk_##uv_t##_as_handle(hnd); \
     cb = kk_uv_handle_take_callback(raw_hnd); \
     do drops while(0); \
@@ -320,10 +323,20 @@ static void kk_uv_drop(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
     // this is the last reference.
     kk_assert(has_box(hnd->flags));
     clear_flag(hnd->flags, BOX);
+    kk_warning_message("Dropping uv box %p of type %x with flags %x\n",
+      hnd, hnd->uv.type, hnd->flags.bits);
     kk_box_drop(hnd->box, _ctx);
   } else {
     // non-refcounted, close immediately
-    uv_close(&(hnd->uv), kk_uv_close_cb);
+    // TODO it seems like perhaps requests NEVER need to be closed, only handles.
+    // So we don't even need this function, we should distinguish handles from reqs
+    kk_warning_message("Directly dropping uv request %p of type %x with flags %x\n",
+      hnd, hnd->uv.type, hnd->flags.bits);
+    // uv_close(&(hnd->uv), kk_uv_close_cb);
+    kk_uv_handle_drop_contents(hnd, _ctx);
+    kk_warning_message("freed contents...\n");
+    kk_free(hnd, _ctx);
+    kk_warning_message("freed!\n");
   }
 }
 
@@ -333,6 +346,7 @@ static void kk_uv_drop(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
 __attribute__((unused))
 static void kk_uv_free_fn(void *p, kk_block_t *block, kk_context_t *_ctx) {
   kk_uv_handle_t* hnd = (kk_uv_handle_t*)p;
+  kk_warning_message("Closing uv handle of type %x with flags %x\n",
+    hnd->uv.type, hnd->flags.bits);
   uv_close(&hnd->uv, kk_uv_close_cb);
 }
-

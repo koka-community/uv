@@ -1,7 +1,7 @@
 module std/stream
 
 import uv/stream
-import uv/event-loop
+import uv/core
 import std/async/async
 import std/core/bytes
 
@@ -16,6 +16,7 @@ pub fun read-all(stream): <io,async> bytes
 
   await1 fn(complete)
     stream.read-start fn(chunk)
+      println("READ CHUNK: " ++ chunk.is-error.show)
       match chunk
         Error(e) -> complete(Error(e))
         Ok(Nothing) -> complete(Ok(!result))
@@ -24,7 +25,15 @@ pub fun read-all(stream): <io,async> bytes
 
 
 pub fun write(stream: io-stream, data: string): <asyncx> ()
-  await1(fn(cb) stream.stream/write([data.bytes], cb)).untry
+  await1(fn(cb)
+    val cb2 = fn(result: uv-status-code)
+      println("RESULT: " ++ result.show)
+      cb(result)
+    stream.stream/write([data.bytes].vector, cb2)
+  ).untry
 
-pub fun close(stream: io-stream): asyncx ()
-  await0(fn(cb) stream.uv-handle.event-loop/close(cb))
+pub fun close(stream: io-stream): io-noexn uv-status-code
+  val result = stream.uv-handle.core/close-handle()
+  println("closed? " ++ result.show)
+  result
+

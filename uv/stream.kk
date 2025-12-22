@@ -13,7 +13,7 @@ pub import uv/core
 import uv/buffer
 
 extern import
-  c file "inline/stream.c"
+  c file "inline/stream"
 
 pub value struct uv-stream { internal : any };
 

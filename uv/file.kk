@@ -187,6 +187,7 @@ pub value struct uv-dir { internal : intptr_t };
 
 // Checks that the given file is the last unique reference
 // and thus will be closed, otherwise returns UV_EBUSY
+// TODO: should this be async to wait for actual close completion?
 pub fun uv/close(file: uv-file): io-noexn uv-status-code
   if is-ref-unique(file.internal) then
     UV_OK

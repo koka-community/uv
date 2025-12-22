@@ -7,9 +7,8 @@
 ---------------------------------------------------------------------------*/
 
 module uv/pipe
-pub import uv/event-loop
 pub import std/core/bytes
-pub import uv/utils
+pub import uv/core
 import uv/stream
 
 extern import
