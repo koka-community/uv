@@ -55,13 +55,13 @@ static kk_uv_file__fstat kk_uv_stat_from_uv_stat(uv_stat_t* uvstat, kk_context_t
 //   kk_uv_oneshot_fs_setup_file(file, uv_fs_close, kk_std_os_fs_unit_cb);
 // }
 
-declare_uv_struct(uv_fs, kk_uv_free_fn)
+declare_uv_req(uv_fs)
 
 static void kk_std_os_file_open_cb(uv_fs_t* req) {
   kk_context_t* _ctx = kk_get_context();
   kk_uv_handle_t* hnd = uv_fs_as_kk_handle(req);
   kk_function_t callback = kk_uv_handle_take_callback(hnd);
-  kk_uv_drop(hnd, _ctx);
+  kk_uv_req_drop(hnd, _ctx);
 
   kk_uv_error_callback(callback,
     kk_status_error_or(req->result,

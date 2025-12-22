@@ -1,5 +1,5 @@
 // kk_uv_timer_t:
-declare_uv_struct(uv_timer, kk_uv_free_fn);
+declare_uv_handle(uv_timer);
 
 kk_std_core_exn__error kk_uv_timer_init(kk_context_t* _ctx) {
   int status;

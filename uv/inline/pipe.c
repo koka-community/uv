@@ -1,4 +1,4 @@
-declare_uv_struct(uv_pipe, kk_uv_free_fn);
+declare_uv_handle(uv_pipe);
 
 static kk_uv_stream_t* kk_uv_pipe_as_stream(kk_uv_pipe_t* pipe) {
   // uv_pipe_t is a ‘subclass’ of uv_stream_t.
@@ -20,7 +20,7 @@ static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
   }
 
   if (status != UV_OK) {
-    kk_uv_drop(kk_uv_pipe_as_handle(readable), _ctx);
+    kk_uv_handle_drop(kk_uv_pipe_as_handle(readable), _ctx);
     return kk_status_error(status, _ctx);
   }
 
@@ -32,8 +32,8 @@ static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
   }
 
   if (status != UV_OK) {
-    kk_uv_drop(kk_uv_pipe_as_handle(readable), _ctx);
-    kk_uv_drop(kk_uv_pipe_as_handle(writable), _ctx);
+    kk_uv_handle_drop(kk_uv_pipe_as_handle(readable), _ctx);
+    kk_uv_handle_drop(kk_uv_pipe_as_handle(writable), _ctx);
     return kk_status_error(status, _ctx);
   }
   
