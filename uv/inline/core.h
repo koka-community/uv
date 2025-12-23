@@ -161,10 +161,11 @@ declare_uv_req_base(uv_req);
 // ------------------------------
 
 // Raw allocation logic shared by requests / handles
+// On error, the memory is freed and no action is needed from the caller.
 #define malloc_and_init_raw(uv_type, hnd, status, ...) \
   kk_##uv_type##_t* hnd = kk_malloc(sizeof(kk_##uv_type##_t), _ctx); \
   status = uv_type##_init(__VA_ARGS__); \
-  kk_warning_message("init (%s_init) returned %x (type=%x)\n", #uv_type, status, hnd->uv.type); \
+  kk_warning_message("init (%s_init) returned %x (type=%d)\n", #uv_type, status, hnd->uv.type); \
   if (status != UV_OK) { \
     kk_free(hnd, _ctx); \
   }
@@ -172,12 +173,18 @@ declare_uv_req_base(uv_req);
 // Create a new long-lived handle, which stores a
 // reference (kk_box_t) to itself.
 // Used when the result will be returned to koka code.
+// On error, the handle is freed and no action is needed from the caller.
 #define malloc_and_init_handle(uv_type, hnd, status, ...) \
   malloc_and_init_raw(uv_type, hnd, status, __VA_ARGS__); \
   if (status == UV_OK) { \
-    hnd->flags.bits = BOX_BIT & REFCOUNTED_BIT; \
-    hnd->box = kk_##uv_type##_box(hnd, _ctx); \
+    hnd->flags.bits = REFCOUNTED_BIT; \
   }
+
+
+    // hnd->box = kk_##uv_type##_box(hnd, _ctx); \
+    // kk_warning_message("initialized %s with flags=%x\n", \
+    //   #uv_type, hnd->flags.bits \
+    // ); \
 
 // Requests require no initialization on the uv side.
 #define malloc_req(uv_type, hnd, cb, ...) \
@@ -196,10 +203,10 @@ declare_uv_req_base(uv_req);
   status = call_uv_expr; \
   if (status != UV_OK) { \
     kk_warning_message("kk_uv_setup_callback status=%d\n", status); \
-    kk_uv_handle_t* raw_hnd = kk_##uv_t##_as_handle(hnd); \
-    cb = kk_uv_any_take_callback(kk_uv_handle_as_any(raw_hnd)); \
+    kk_uv_handle_t* raw_hnd = kk_##uv_t##_as_req(hnd); \
+    cb = kk_uv_any_take_callback(kk_uv_req_as_any(raw_hnd)); \
     do drops while(0); \
-    kk_uv_handle_drop(raw_hnd, _ctx); \
+    kk_uv_req_drop(raw_hnd, _ctx); \
     do on_error while(0); \
     return; \
   } else { \
@@ -272,6 +279,12 @@ static kk_box_t kk_uv_handle_take_box(kk_uv_handle_t* hnd, kk_context_t* _ctx) {
   return hnd->box;
 }
 
+__attribute__((unused))
+static kk_box_t kk_uv_handle_dup_box(kk_uv_handle_t* hnd, kk_context_t* _ctx) {
+  kk_assert(has_box(hnd->flags));
+  return kk_box_dup(hnd->box, _ctx);
+}
+
 // ------------------------------
 // Error / exception helpers
 // ------------------------------
@@ -329,39 +342,37 @@ static void kk_uv_error_callback(kk_function_t callback, kk_std_core_exn__error 
 // Handle destruction
 // ------------------------------
 
-// Drop the contents of a uv handle, in preparation for the handle itself
-// to be freed. Only drops what is set based on hnd->flags.
+// Drop the contents of a uv handle. Freeing won't actually occur
+// until the last reference is dropped and the free_fn is invoked.
+// This should only be called for:
+//  - kk_uv_handle_close, where it's an error if the handle is still referenced
+//  - error branches, in which case the reference should never have been passed to koka code
 __attribute__((unused))
-static void kk_uv_handle_drop_contents(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
+static void kk_uv_handle_drop_references(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
   if (has_callback(hnd->flags)) {
     clear_flag(hnd->flags, CALLBACK);
     kk_function_drop(hnd->callback, _ctx);
   }
 
   if (has_box(hnd->flags)) {
-    if (!is_refcounted(hnd->flags)) {
-      // only drop box if it's some related piece of state, not `self`
-      clear_flag(hnd->flags, BOX);
-      kk_box_drop(hnd->box, _ctx);
-    }
+    clear_flag(hnd->flags, BOX);
+    kk_box_drop(hnd->box, _ctx);
   }
 }
 
 // TODO is this valid? Or do we need a req-only version?
 __attribute__((unused))
-static void kk_uv_req_drop_contents(kk_uv_req_t *hnd, kk_context_t *_ctx) {
-  kk_uv_handle_drop_contents((kk_uv_handle_t*)hnd, _ctx);
+static void kk_uv_req_drop_references(kk_uv_req_t *hnd, kk_context_t *_ctx) {
+  kk_uv_handle_drop_references((kk_uv_handle_t*)hnd, _ctx);
 }
 
 // free a request type (immediately)
 __attribute__((unused))
 static void kk_uv_req_drop(kk_uv_req_t *hnd, kk_context_t *_ctx) {
-  kk_warning_message("Directly dropping uv request %p of type %x with flags %x\n",
+  kk_warning_message("[kk_uv_req_drop] dropping uv request %p of type %x with flags %x\n",
     hnd, hnd->uv.type, hnd->flags.bits);
-  kk_uv_req_drop_contents(hnd, _ctx);
-  kk_warning_message("freed contents...\n");
+  kk_uv_req_drop_references(hnd, _ctx);
   kk_free(hnd, _ctx);
-  kk_warning_message("freed!\n");
 }
 
 // Callback invoked by uv once a handle is closed.
@@ -369,21 +380,26 @@ __attribute__((unused))
 static void kk_uv_handle_close_cb(uv_handle_t* uvhnd) {
   kk_context_t* _ctx = kk_get_context();
   kk_uv_handle_t* kk_hnd = uv_handle_as_kk(uvhnd);
-  kk_uv_handle_drop_contents(kk_hnd, _ctx);
+  kk_warning_message("[kk_uv_handle_close_cb] CLOSED uv handle of type %d\n", uvhnd->type);
   kk_free(kk_hnd, _ctx);
 }
 
-// drop a refcounted type, free (close) a nonrefcounted type
-__attribute__((unused))
-static void kk_uv_handle_drop(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
-  // Will invoke kk_uv_free_fn (or equivalent) if
-  // this is the last reference.
-  kk_assert(has_box(hnd->flags));
-  clear_flag(hnd->flags, BOX);
-  kk_warning_message("Dropping uv box %p of type %x with flags %x\n",
-    hnd, hnd->uv.type, hnd->flags.bits);
-  kk_box_drop(hnd->box, _ctx);
-}
+// // Drop a refcounted handle. Only used in error paths when init fails, otherwise
+// // uv_close is needed.
+// __attribute__((unused))
+// static void kk_uv_handle_drop_uninitialized(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
+//   kk_warning_message("kk_uv_handle_drop: removing box? %d\n", has_box(hnd->flags));
+//   if (has_box(hnd->flags)) {
+//     // This invoke kk_uv_free_fn (or equivalent) if
+//     // this is the last reference.
+//     clear_flag(hnd->flags, BOX);
+//     kk_box_drop(hnd->box, _ctx);
+//   }
+
+// //   kk_warning_message("Dropping uv box %p of type %x with flags %x\n",
+// //     hnd, hnd->uv.type, hnd->flags.bits);
+// //   kk_box_drop(hnd->box, _ctx);
+// }
 
 // Free function used for refcounted handles.
 // Triggers a uv_close, the object will be freed only
@@ -391,7 +407,7 @@ static void kk_uv_handle_drop(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
 __attribute__((unused))
 static void kk_uv_handle_free_fn(void *p, kk_block_t *block, kk_context_t *_ctx) {
   kk_uv_handle_t* hnd = (kk_uv_handle_t*)p;
-  kk_warning_message("Closing uv handle of type %x with flags %x\n",
+  kk_warning_message("Closing uv handle of type %d with flags %x\n",
     hnd->uv.type, hnd->flags.bits);
   uv_close(&hnd->uv, kk_uv_handle_close_cb);
 }

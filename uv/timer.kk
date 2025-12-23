@@ -28,6 +28,9 @@ abstract struct timer (
 // pub extern clear-timeout( tid : any) : io-noexn ()
 //   c "kk_uv_clear_timeout"
 
+fun close(timer: timer): io-noexn uv-status-code
+  close-handle(Uv-handle(timer.internal))
+
 fun unwrap-or-abort(err: error<a>): io-noexn a
   match err
     Ok(a) -> a
@@ -38,6 +41,7 @@ pub fun set-timeout(cb : () -> io-noexn (), ms : int32 ) : io-noexn any
   val timer = timer-init().unwrap-or-abort
   timer.timer-start(ms.int64, 0.int64, fn(status) ->
     val () = status.to-error(()).unwrap-or-abort
+    timer.close() // ignore error, this mostly exists to prevent premature disposal
     cb()
   )
   timer.internal

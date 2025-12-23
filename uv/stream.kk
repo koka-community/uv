@@ -45,17 +45,17 @@ pub fun uv-handle(tcp: uv-stream): io-noexn uv-handle
 
 // Read data from an incoming stream. The `callback` will be made several times until there is no more data to read or `read-stop()` is called.
 // Returns `UV_EALREADY` when called twice, and `UV_EINVAL` when the stream is closing.
-pub extern read-start(stream: uv-stream, callback: (error<maybe<bytes>>) -> io-noexn ()): io-noexn ()
+pub extern read-start(^stream: uv-stream, callback: (error<maybe<bytes>>) -> io-noexn ()): io-noexn ()
   c "kk_uv_read_start"
 
 // Stop reading data from the stream. The read callback will no longer be called.
 // This function is idempotent and may be safely called on a stopped stream.
 // A non-zero return indicates that finishing releasing resources may be pending on the next input event on that TTY on Windows, and does not indicate failure.
-pub extern read-stop(stream: uv-stream): io-noexn uv-status-code
+pub extern read-stop(^stream: uv-stream): io-noexn uv-status-code
   c "kk_uv_read_stop"
 
 // Write data to stream. Buffers are written in order.
-pub extern stream/write(stream: uv-stream, data: vector<bytes>, callback: (uv-status-code) -> io-noexn ()): io-noexn ()
+pub extern stream/write(^stream: uv-stream, data: vector<bytes>, callback: (uv-status-code) -> io-noexn ()): io-noexn ()
   c "kk_uv_write"
 
 // // Extended write function for sending handles over a pipe.

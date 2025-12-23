@@ -7,7 +7,7 @@ import std/core/bytes
 
 pub alias io-stream = uv-stream
 
-pub fun read-all(stream): <io,async> bytes
+pub fun read-all(^stream): <io,async> bytes
   val result: ref<_, bytes> = ref(empty())
   with finally
     // error only indicates delayed cleanup, not failure
@@ -24,10 +24,10 @@ pub fun read-all(stream): <io,async> bytes
   .untry
 
 
-pub fun write(stream: io-stream, data: string): <asyncx> ()
+pub fun write(^stream: io-stream, data: string): <asyncx> ()
   await1(fn(cb)
     val cb2 = fn(result: uv-status-code)
-      println("RESULT: " ++ result.show)
+      println("WRITE RESULT: " ++ result.show)
       cb(result)
     stream.stream/write([data.bytes].vector, cb2)
   ).untry

@@ -17,7 +17,7 @@ kk_std_core_exn__error kk_uv_timer_init(kk_context_t* _ctx) {
 kk_uv_status_code_t kk_uv_timer_stop(kk_uv_timer__timer t, kk_context_t* _ctx) {
   kk_uv_timer_t* kk_timer = kk_uv_timer_unbox_borrowed(t.internal, _ctx);
   int status = uv_timer_stop(&kk_timer->uv);
-  return kk_uv_status_code(status);
+  return kk_uv_status_code(status, _ctx);
 }
 
 void kk_uv_timer_unit_callback(uv_timer_t* uv_timer) {

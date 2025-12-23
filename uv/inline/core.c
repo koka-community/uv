@@ -45,6 +45,7 @@ kk_uv_status_code_t kk_uv_loop_run(kk_context_t* _ctx){
 }
 
 static kk_uv_status_code_t kk_uv_loop_close(kk_context_t* _ctx) {
+  kk_warning_message("[kk_uv_loop_close]\n");
   int ret = uv_loop_close(uvloop());
   kk_free(uvloop(), _ctx);
   return kk_uv_status_code(ret, _ctx);
@@ -52,12 +53,30 @@ static kk_uv_status_code_t kk_uv_loop_close(kk_context_t* _ctx) {
 
 // general handler utilities
 
-// static void kk_uv_close(kk_uv_utils__uv_handle handle, kk_function_t callback, kk_context_t* _ctx) {
-//   uv_handle_t* uvhnd_dbg = kk_owned_handle_to_uv_handle(uv_handle_t, handle);
-//   // kk_warning_message("Closing handle of type %d with old_data=%p\n", uvhnd_dbg->type, uvhnd_dbg->data);
-//   kk_set_hnd_cb(uv_handle_t, handle, uvhnd, callback);
-//   uv_close(uvhnd, kk_uv_handle_close_callback);
-// }
+static kk_uv_status_code_t kk_uv_handle_close(kk_uv_core__uv_handle handle, kk_context_t* _ctx) {
+  kk_uv_handle_t* uv_hnd = kk_uv_handle_unbox_borrowed(handle.internal, _ctx);
+  // kk_warning_message("has_box=%d\n", has_box(uv_hnd->flags));
+  // kk_warning_message("before dropping box, current refcount is %d\n",
+  //   kk_block_refcount(kk_box_to_ptr(handle.internal, kk_context()))
+  // );
+
+  // drop an internal handle which may be shared with pending operations
+  kk_uv_handle_drop_references(uv_hnd, _ctx);
+
+  kk_warning_message("[kk_uv_handle_close] current refcount of handle type %d is %d (expected 0)\n",
+    uv_hnd->uv.type,
+    kk_block_refcount(kk_box_to_ptr(handle.internal, kk_context()))
+  );
+
+  // handles are closed on drop. If `handle` is not the last unique reference,
+  // return EBUSY to indicate a programmer error
+  if (kk_block_is_unique(kk_box_to_ptr(handle.internal, kk_context()))) {
+    kk_warning_message("Closing handle of type %d\n", uv_hnd->uv.type);
+    return kk_uv_status_code(UV_OK, _ctx);
+  } else {
+    return kk_uv_status_code(UV_EBUSY, _ctx);
+  }
+}
 
 
 // static void kk_uv_handle_close_callback(uv_handle_t* handle){

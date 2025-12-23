@@ -13,6 +13,7 @@ void kk_uv_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* 
 }
 
 static void kk_uv_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf){
+  kk_warning_message("kk_uv_read_callback: nread=%d\n", nread);
   kk_context_t* _ctx = kk_get_context();
   kk_uv_handle_t* kk_hnd = uv_stream_as_kk_handle(stream);
 
@@ -62,12 +63,16 @@ static void kk_uv_read_start(kk_uv_stream__uv_stream stream_s, kk_function_t cal
 
   int status = kk_uv_handle_try_set_callback(kk_hnd, callback, _ctx);
   if (status != UV_OK) {
-    kk_uv_error_status_callback(callback, status, _ctx);
+    return kk_uv_error_status_callback(callback, status, _ctx);
   }
 
+  kk_warning_message("uv_read_start, refcount =%d\n",
+    kk_block_refcount(kk_box_to_ptr(stream_s.internal, kk_context()))
+  );
   status = uv_read_start(&stream->uv, kk_uv_alloc_callback, kk_uv_read_callback);
+  kk_warning_message("uv_read_start returned %d, awaiting callback\n", status);
   if (status != UV_OK) {
-    kk_uv_error_status_callback(kk_uv_handle_take_callback(kk_hnd), status, _ctx);
+    return kk_uv_error_status_callback(kk_uv_handle_take_callback(kk_hnd), status, _ctx);
   }
 }
 
@@ -76,10 +81,13 @@ static kk_uv_status_code_t kk_uv_read_stop(kk_uv_stream__uv_stream stream_s, kk_
   kk_uv_handle_t* kk_hnd = kk_uv_stream_as_handle(stream);
 
   int status = uv_read_stop(&stream->uv);
-  // remove cb & bytes if set
-  kk_uv_handle_drop_contents(kk_hnd, _ctx);
+  // remove cb, docs say it won't be called again
+  // TODO: should we invoke it with a "STOPPED" sentinel somehow?
+  kk_function_drop(kk_uv_handle_take_callback(kk_hnd), _ctx);
   return kk_uv_status_code(status, _ctx);
 }
+
+static void* stream_g;
 
 static void kk_uv_write_callback(uv_write_t* write, int status){
   kk_context_t* _ctx = kk_get_context();
@@ -89,7 +97,13 @@ static void kk_uv_write_callback(uv_write_t* write, int status){
   // free the input data and the request
   kk_uv_bufs_t* bufs = (kk_uv_bufs_t*)write->data;
   kk_uv_bufs_drop(bufs, _ctx);
-  kk_warning_message("dropping write %p after status %d\n", kk_hnd, status);
+  kk_warning_message("[kk_uv_write_callback] dropping write %p after status %d\n", kk_hnd, status);
+
+  kk_warning_message("[kk_uv_write_callback] stream(%p) refcount = %d\n",
+      stream_g,
+    kk_block_refcount(stream_g)
+  );
+
   kk_uv_req_drop(kk_hnd, _ctx);
 
   kk_status_code_callback(callback, status, _ctx);
@@ -104,10 +118,19 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
   kk_uv_bufs_t* kk_uv_bufs = kk_bytes_vec_to_uv_bufs(bufs, &num_bufs, _ctx);
   write->uv.data = (void*) kk_uv_bufs;
 
+  stream_g = kk_box_to_ptr(stream.internal, _ctx);
+  kk_warning_message("uv_write start, stream (%p) refcount = %d\n",
+    stream_g,
+    kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
+  );
+
   kk_uv_stream_t* uv_stream = kk_uv_stream_unbox_borrowed(stream.internal, _ctx);
   int status = uv_write(&write->uv, &uv_stream->uv, kk_uv_bufs->uv_bufs, num_bufs, kk_uv_write_callback);
+  kk_warning_message("uv_write returned %d\n", status);
   if (status != UV_OK) {
-    kk_warning_message("uv_write returned %d\n", status);
-    kk_uv_write_callback(&write->uv, status);
+    kk_uv_bufs_drop(kk_uv_bufs, _ctx);
+    cb = kk_uv_req_take_callback(kk_uv_write_as_req(write));
+    kk_free(write, _ctx);
+    kk_status_code_callback(cb, status, _ctx);
   }
 }

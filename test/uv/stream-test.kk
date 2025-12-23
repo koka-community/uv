@@ -1,11 +1,14 @@
 import uv/core
 import uv/pipe
-// import uv/net
+// import uv/net"
+import uv/core
 import uv/stream
 import std/stream
 import std/test
 import std/async/async
 import std/num/int32
+import std/time/duration
+import uv/timer // settimeout
 
 fun error/show(e: error<t>, ?t/show: t -> string): string
   match e
@@ -21,23 +24,37 @@ fun main()
   with async/handle
   run-tests(suite)
 
+
+extern get-ref-count(^box: any): io-noexn int32
+  c inline "kk_block_refcount(kk_box_to_ptr(#1, kk_context()))"
+
+fun borrow-stream(^w: uv-stream)
+  println("I've borrowed a stream! its refcount is " ++ w.internal.get-ref-count.show)
+  wait(1.milli-seconds)
+
+// fun copy-stream(^w: uv-stream)
+//   println("I've copied a stream! its refcount is" ++ w.internal.get-ref-count.show)
+
 fun suite()
   effectful-test("reading & writing a pipe")
     expect("hello")
       val (r, w) = mkpipe().untry
-      val ((), output) = interleaved(
-        {
-          with finally { println("write branch END") }
-          with finally { w.close(); () } // TODO untry
-          w.write("hello")
-        },
-        {
-          with finally { println("read branch END") }
-          with finally { r.close(); () } // TODO .untry
-          r.read-all().string
-        }
-      )
-      output
+      println("before write, w refcount = " ++ w.internal.get-ref-count.show)
+      borrow-stream(w)
+      println("after borrow, w refcount = " ++ w.internal.get-ref-count.show)
+      w.close().untry
+      // w.write("hello")
+      // println("after write, w refcount = " ++ w.internal.get-ref-count.show)
+      // try { w.close().untry }
+      // println("after write close, w refcount = " ++ w.internal.get-ref-count.show)
+
+      // // val output = r.read-all().string
+      // // println("closing READ")
+      // // r.close().untry
+      // // output
+      // r.close()
+      wait(1.milli-seconds)
+      "todo"
 
   // effectful-test("reading & writing a socket")
   //   expect(("hello!", "pong: hello!"))
