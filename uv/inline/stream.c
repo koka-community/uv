@@ -4,16 +4,24 @@ void kk_uv_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* 
   kk_context_t* _ctx = kk_get_context();
 
   // allocate a raw C buffer backing a kk_bytes struct.
-  // Always allocates one more byte than requested, for a null byte
+  // The underlying buffer will contain one more than the size we report back to
+  // libuv.
   // TODO: is this necessary? should bytes->clen refer to the *real* length?
+  if (suggested_size >= 1024) {
+    // libuv usually allocates 64kb at once, it probably doesn't need 64kb + 1b.
+    suggested_size--;
+  }
   kk_ssize_t full_size = suggested_size + 1;
+  kk_warning_message("allocating %d bytes for handle@%p, storing in buf %p\n", full_size, handle, buf);
   buf->base = kk_malloc(full_size, _ctx);
   buf->len = suggested_size;
-  kk_memset(&buf->base, 0, full_size);
+  kk_warning_message("zeroing %d bytes @ %p\n", full_size, buf->base);
+  kk_memset(buf->base, 0, full_size);
+  kk_warning_message("zeroed %d bytes @ %p\n", full_size, buf->base);
 }
 
 static void kk_uv_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf){
-  kk_warning_message("kk_uv_read_callback: nread=%d\n", nread);
+  kk_warning_message("kk_uv_read_callback: nread=%d, stream=%p buf=%p\n", nread, stream, buf);
   kk_context_t* _ctx = kk_get_context();
   kk_uv_handle_t* kk_hnd = uv_stream_as_kk_handle(stream);
 
@@ -29,7 +37,7 @@ static void kk_uv_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf
   kk_function_t callback;
   kk_std_core_exn__error result;
   if (nread < 0) {
-    callback = kk_uv_handle_take_callback(kk_hnd); // not needed any more
+    callback = kk_uv_handle_take_callback(kk_hnd); // read_cb won't be called again after an error
     if (nread == UV_EOF) {
       result = kk_std_core_exn__new_Ok(
         kk_std_core_types__maybe_box(
@@ -87,6 +95,7 @@ static kk_uv_status_code_t kk_uv_read_stop(kk_uv_stream__uv_stream stream_s, kk_
   return kk_uv_status_code(status, _ctx);
 }
 
+// TODO remove this debugging hack
 static void* stream_g;
 
 static void kk_uv_write_callback(uv_write_t* write, int status){
@@ -133,4 +142,11 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
     kk_free(write, _ctx);
     kk_status_code_callback(cb, status, _ctx);
   }
+}
+
+static void kk_uv_write2(kk_uv_stream__uv_stream stream, kk_std_core_types__vector bufs, kk_function_t cb, kk_context_t* _ctx){
+  kk_warning_message("uv_write noop, stream (%p) refcount = %d\n",
+    stream_g,
+    kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
+  );
 }

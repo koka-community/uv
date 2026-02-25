@@ -55,16 +55,12 @@ static kk_uv_status_code_t kk_uv_loop_close(kk_context_t* _ctx) {
 
 static kk_uv_status_code_t kk_uv_handle_close(kk_uv_core__uv_handle handle, kk_context_t* _ctx) {
   kk_uv_handle_t* uv_hnd = kk_uv_handle_unbox_borrowed(handle.internal, _ctx);
-  // kk_warning_message("has_box=%d\n", has_box(uv_hnd->flags));
-  // kk_warning_message("before dropping box, current refcount is %d\n",
-  //   kk_block_refcount(kk_box_to_ptr(handle.internal, kk_context()))
-  // );
-
-  // drop an internal handle which may be shared with pending operations
+  // drop references held by the handle (e.g. callbacks)
   kk_uv_handle_drop_references(uv_hnd, _ctx);
 
-  kk_warning_message("[kk_uv_handle_close] current refcount of handle type %d is %d (expected 0)\n",
+  kk_warning_message("[kk_uv_handle_close] current refcount of handle type %d @ %p is %d (expected 0)\n",
     uv_hnd->uv.type,
+    kk_box_to_ptr(handle.internal, _ctx),
     kk_block_refcount(kk_box_to_ptr(handle.internal, kk_context()))
   );
 

@@ -27,7 +27,9 @@ fun abort-unless-ok(status, desc)
 pub fun handle-loop(action)
   init-loop()
   val res = action()
+  println("running loop")
   abort-unless-ok(run-loop(), "run-loop")
+  println("closing loop")
   abort-unless-ok(close-loop(), "close-loop")
   res
 
@@ -51,6 +53,11 @@ pub value struct uv-handle { internal: any }
 // if there are still other references to the handle.
 pub extern close-handle(hnd: uv-handle): io-noexn uv-status-code
   c "kk_uv_handle_close"
+
+// Close any resource with a `uv-handle` accessor
+pub fun close(res: a, ?uv-handle: (a) -> uv-handle): io-noexn uv-status-code
+  val hnd = res.uv-handle
+  close-handle(hnd)
 
 // pub fun close-handle(hnd: uv-handle): io-noexn uv-status-code
 //   if is-ref-unique(hnd.internal) then

@@ -18,7 +18,7 @@ extern import
 pub value struct uv-stream { internal : any };
 
 // Casts the stream to the underlying uv handle type
-pub fun uv-handle(tcp: uv-stream): io-noexn uv-handle
+pub fun uv-handle(tcp: uv-stream): uv-handle
   Uv-handle(tcp.internal)
 
 // // Shutdown the outgoing (write) side of a duplex stream.

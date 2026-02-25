@@ -1,6 +1,6 @@
 module std/stream
 
-import uv/stream
+pub import uv/stream
 import uv/core
 import std/async/async
 import std/core/bytes
@@ -16,7 +16,7 @@ pub fun read-all(^stream): <io,async> bytes
 
   await1 fn(complete)
     stream.read-start fn(chunk)
-      println("READ CHUNK: " ++ chunk.is-error.show)
+      println("READ CHUNK (error?): " ++ chunk.is-error.show)
       match chunk
         Error(e) -> complete(Error(e))
         Ok(Nothing) -> complete(Ok(!result))
@@ -31,9 +31,3 @@ pub fun write(^stream: io-stream, data: string): <asyncx> ()
       cb(result)
     stream.stream/write([data.bytes].vector, cb2)
   ).untry
-
-pub fun close(stream: io-stream): io-noexn uv-status-code
-  val result = stream.uv-handle.core/close-handle()
-  println("closed? " ++ result.show)
-  result
-

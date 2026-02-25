@@ -32,29 +32,32 @@ fun borrow-stream(^w: uv-stream)
   println("I've borrowed a stream! its refcount is " ++ w.internal.get-ref-count.show)
   wait(1.milli-seconds)
 
-// fun copy-stream(^w: uv-stream)
-//   println("I've copied a stream! its refcount is" ++ w.internal.get-ref-count.show)
+fun use-stream(^w: uv-stream)
+  println("I've borrowed a stream!")
+
+fun copy-stream(w: uv-stream)
+  println("I've copied a stream!")
 
 fun suite()
   effectful-test("reading & writing a pipe")
     expect("hello")
       val (r, w) = mkpipe().untry
-      println("before write, w refcount = " ++ w.internal.get-ref-count.show)
-      borrow-stream(w)
-      println("after borrow, w refcount = " ++ w.internal.get-ref-count.show)
-      w.close().untry
       // w.write("hello")
+      // wait(1.milli-seconds)
+      w.write("hello")
       // println("after write, w refcount = " ++ w.internal.get-ref-count.show)
-      // try { w.close().untry }
-      // println("after write close, w refcount = " ++ w.internal.get-ref-count.show)
+      println("closing w")
+      w.close().untry
+      println("closed w")
 
-      // // val output = r.read-all().string
-      // // println("closing READ")
-      // // r.close().untry
-      // // output
-      // r.close()
+      // val output = r.read-all().string
+      // println("TODO: close r with refcount=" ++ r.internal.get-ref-count.show)
+      use-stream(r)
+      copy-stream(r)
+      r.close().untry
+      // output
       wait(1.milli-seconds)
-      "todo"
+      ""
 
   // effectful-test("reading & writing a socket")
   //   expect(("hello!", "pong: hello!"))
