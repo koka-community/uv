@@ -31,3 +31,6 @@ pub fun write(^stream: io-stream, data: string): <asyncx> ()
       cb(result)
     stream.stream/write([data.bytes].vector, cb2)
   ).untry
+
+pub fun use-async(^stream: io-stream): <asyncx> ()
+  await0(fn(cb) stream.stream/use-async(cb))

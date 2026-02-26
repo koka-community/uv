@@ -144,9 +144,49 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
   }
 }
 
-static void kk_uv_write2(kk_uv_stream__uv_stream stream, kk_std_core_types__vector bufs, kk_function_t cb, kk_context_t* _ctx){
-  kk_warning_message("uv_write noop, stream (%p) refcount = %d\n",
+static void kk_uv_use_cb(uv_timer_t *handle) {
+  kk_context_t* _ctx = kk_get_context();
+  // TODO this leaks timer but we don't care, it's for testing
+  kk_function_t* kk_cb_ptr = (kk_function_t*)(handle->data);
+  kk_function_t kk_cb = *kk_cb_ptr;
+  kk_free(handle->data, _ctx);
+  handle->data = NULL;
+  kk_unit_callback(kk_cb, _ctx);
+}
+
+static void kk_uv_print_refcount(kk_uv_stream__uv_stream stream, kk_context_t* _ctx){
+  kk_warning_message("uv_stream_print_refcount, stream (%p) refcount = %d\n",
     stream_g,
     kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
+  );
+}
+
+static void kk_uv_use(kk_uv_stream__uv_stream stream, kk_function_t cb, kk_context_t* _ctx){
+  kk_warning_message("uv_stream_use noop, stream (%p) refcount = %d\n",
+    stream_g,
+    kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
+  );
+  
+  uv_timer_t *timer = kk_malloc(sizeof(uv_timer_t), _ctx);
+  kk_function_t* fun_ptr = kk_malloc(sizeof(kk_function_t), _ctx);
+
+  int status = uv_timer_init(uvloop(), timer);
+  kk_assert(status == 0);
+  
+  *fun_ptr = cb;
+  timer->data = (void*) fun_ptr;
+
+  status = uv_timer_start(timer, kk_uv_use_cb, 0, 0);
+  kk_assert(status == 0);
+}
+
+static kk_std_core_exn__error kk_uv_tty_init(int32_t fd, kk_context_t* _ctx){
+  int status;
+  malloc_and_init_handle(uv_tty, tty, status, uvloop(), &tty->uv, fd, 0);
+
+  return kk_status_error_or(
+    status,
+    kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_tty_box(tty, _ctx), _ctx), _ctx),
+    _ctx
   );
 }

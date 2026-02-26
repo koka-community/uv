@@ -32,32 +32,46 @@ fun borrow-stream(^w: uv-stream)
   println("I've borrowed a stream! its refcount is " ++ w.internal.get-ref-count.show)
   wait(1.milli-seconds)
 
-fun use-stream(^w: uv-stream)
-  println("I've borrowed a stream!")
 
-fun copy-stream(w: uv-stream)
-  println("I've copied a stream!")
+fun noop-async(): async ()
+  ()
 
 fun suite()
-  effectful-test("reading & writing a pipe")
-    expect("hello")
-      val (r, w) = mkpipe().untry
-      // w.write("hello")
-      // wait(1.milli-seconds)
-      w.write("hello")
-      // println("after write, w refcount = " ++ w.internal.get-ref-count.show)
-      println("closing w")
-      w.close().untry
-      println("closed w")
+  effectful-test("stdout")
+    val stdout = stream/tty-init(1.int32).untry
+    stdout.print-refcount()
+    stdout.print-refcount()
+    // w.write("hello")
+    println("closing w")
+    stdout.close().untry
+    println("closed w")
 
-      // val output = r.read-all().string
-      // println("TODO: close r with refcount=" ++ r.internal.get-ref-count.show)
-      use-stream(r)
-      copy-stream(r)
-      r.close().untry
-      // output
-      wait(1.milli-seconds)
-      ""
+    noop-async()
+    // wait(1.milli-seconds)
+    ()
+
+  // effectful-test("reading & writing a pipe")
+  //   expect("hello")
+  //     val (r, w) = mkpipe().untry
+  //     w.print-refcount()
+  //     w.print-refcount()
+  //     // w.write("hello")
+  //     // wait(1.milli-seconds)
+  //     // w.write("hello")
+  //     // // println("after write, w refcount = " ++ w.internal.get-ref-count.show)
+  //     println("closing w")
+  //     w.close().untry
+  //     println("closed w")
+
+  //     // val output = r.read-all().string
+  //     // println("TODO: close r with refcount=" ++ r.internal.get-ref-count.show)
+  //     // use-stream(r)
+  //     // copy-stream(r)
+  //     // r.close().untry
+  //     // // output
+  //     // wait(1.milli-seconds)
+  //     noop-async()
+  //     ""
 
   // effectful-test("reading & writing a socket")
   //   expect(("hello!", "pong: hello!"))
