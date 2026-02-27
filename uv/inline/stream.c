@@ -111,12 +111,12 @@ static void kk_uv_write_callback(uv_write_t* write, int status){
   // free the input data and the request
   kk_uv_bufs_t* bufs = (kk_uv_bufs_t*)write->data;
   kk_uv_bufs_drop(bufs, _ctx);
-  kk_warning_message("[kk_uv_write_callback] dropping write %p after status %d\n", kk_hnd, status);
+  // kk_warning_message("[kk_uv_write_callback] dropping write %p after status %d\n", kk_hnd, status);
 
-  kk_warning_message("[kk_uv_write_callback] stream(%p) refcount = %d\n",
-      stream_g,
-    kk_block_refcount(stream_g)
-  );
+  // kk_warning_message("[kk_uv_write_callback] stream(%p) refcount = %d\n",
+  //     stream_g,
+  //   kk_block_refcount(stream_g)
+  // );
 
   kk_uv_req_drop(kk_hnd, _ctx);
 
@@ -133,14 +133,14 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
   write->uv.data = (void*) kk_uv_bufs;
 
   stream_g = kk_box_to_ptr(stream.internal, _ctx);
-  kk_warning_message("uv_write start, stream (%p) refcount = %d\n",
-    stream_g,
-    kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
-  );
+  // kk_warning_message("uv_write start, stream (%p) refcount = %d\n",
+  //   stream_g,
+  //   kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
+  // );
 
   kk_uv_stream_t* uv_stream = kk_uv_stream_unbox_borrowed(stream.internal, _ctx);
   int status = uv_write(&write->uv, &uv_stream->uv, kk_uv_bufs->uv_bufs, num_bufs, kk_uv_write_callback);
-  kk_warning_message("uv_write returned %d\n", status);
+  // kk_warning_message("uv_write returned %d\n", status);
   if (status != UV_OK) {
     kk_uv_bufs_drop(kk_uv_bufs, _ctx);
     cb = kk_uv_req_take_callback(kk_uv_write_as_req(write));
@@ -148,50 +148,3 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
     kk_status_code_callback(cb, status, _ctx);
   }
 }
-
-// static void kk_uv_use_cb(uv_timer_t *handle) {
-//   kk_context_t* _ctx = kk_get_context();
-//   // TODO this leaks timer but we don't care, it's for testing
-//   kk_function_t* kk_cb_ptr = (kk_function_t*)(handle->data);
-//   kk_function_t kk_cb = *kk_cb_ptr;
-//   kk_free(handle->data, _ctx);
-//   handle->data = NULL;
-//   kk_unit_callback(kk_cb, _ctx);
-// }
-
-// static void kk_uv_print_refcount(kk_uv_stream__uv_stream stream, kk_context_t* _ctx){
-//   kk_warning_message("uv_stream_print_refcount, stream (%p) refcount = %d\n",
-//     stream_g,
-//     kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
-//   );
-// }
-
-// static void kk_uv_use(kk_uv_stream__uv_stream stream, kk_function_t cb, kk_context_t* _ctx){
-//   kk_warning_message("uv_stream_use noop, stream (%p) refcount = %d\n",
-//     stream_g,
-//     kk_block_refcount(kk_box_to_ptr(stream.internal, kk_context()))
-//   );
-  
-//   uv_timer_t *timer = kk_malloc(sizeof(uv_timer_t), _ctx);
-//   kk_function_t* fun_ptr = kk_malloc(sizeof(kk_function_t), _ctx);
-
-//   int status = uv_timer_init(uvloop(), timer);
-//   kk_assert(status == 0);
-  
-//   *fun_ptr = cb;
-//   timer->data = (void*) fun_ptr;
-
-//   status = uv_timer_start(timer, kk_uv_use_cb, 0, 0);
-//   kk_assert(status == 0);
-// }
-
-// static kk_std_core_exn__error kk_uv_tty_init(int32_t fd, kk_context_t* _ctx){
-//   int status;
-//   malloc_and_init_handle(uv_tty, tty, status, uvloop(), &tty->uv, fd, 0);
-
-//   return kk_status_error_or(
-//     status,
-//     kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_tty_box(tty, _ctx), _ctx), _ctx),
-//     _ctx
-//   );
-// }

@@ -25,13 +25,6 @@ fun main()
   run-tests(suite)
 
 fun suite()
-  // effectful-test("stdout")
-  //   // TODO remove this test once others are working
-  //   val stdout = stream/tty-init(1.int32).untry
-  //   stdout.write("hello\n")
-  //   stdout.close().untry
-  //   ()
-
   effectful-test("reading & writing a pipe")
     expect("hello")
       val (r, w) = mkpipe().untry

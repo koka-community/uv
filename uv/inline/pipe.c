@@ -32,7 +32,7 @@ static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
 
   // readable
   kk_uv_attach_pipe(files[0], &readable, _ctx);
-  kk_warning_message("readable attaching to fd %d\n", (int)files[0]);
+  // kk_warning_message("readable attaching to fd %d\n", (int)files[0]);
   if (status != UV_OK) {
     return kk_status_error(status, _ctx);
   }
@@ -40,16 +40,13 @@ static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
 
   // writable
   kk_uv_attach_pipe(files[1], &writable, _ctx);
-  kk_warning_message("writable attaching to fd %d\n", (int)files[1]);
+  // kk_warning_message("writable attaching to fd %d\n", (int)files[1]);
   if (status != UV_OK) {
     kk_uv_handle_drop_references(readable_hnd, _ctx);
     return kk_status_error(status, _ctx);
   }
-  // kk_uv_handle_t* writable_hnd = kk_uv_pipe_as_handle(writable);
 
   kk_std_core_types__tuple2 result = kk_std_core_types__new_Tuple2(
-    // kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_handle_dup_box(readable_hnd, _ctx), _ctx), _ctx),
-    // kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_handle_dup_box(writable_hnd, _ctx), _ctx), _ctx),
     kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_pipe_box(readable, _ctx), _ctx), _ctx),
     kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_pipe_box(writable, _ctx), _ctx), _ctx),
     _ctx);

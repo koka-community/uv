@@ -165,7 +165,6 @@ declare_uv_req_base(uv_req);
 #define malloc_and_init_raw(uv_type, hnd, status, ...) \
   kk_##uv_type##_t* hnd = kk_malloc(sizeof(kk_##uv_type##_t), _ctx); \
   status = uv_type##_init(__VA_ARGS__); \
-  kk_warning_message("init (%s_init) returned %x (type=%d)\n", #uv_type, status, hnd->uv.type); \
   if (status != UV_OK) { \
     kk_free(hnd, _ctx); \
   }
@@ -179,12 +178,6 @@ declare_uv_req_base(uv_req);
   if (status == UV_OK) { \
     hnd->flags.bits = REFCOUNTED_BIT; \
   }
-
-
-    // hnd->box = kk_##uv_type##_box(hnd, _ctx); \
-    // kk_warning_message("initialized %s with flags=%x\n", \
-    //   #uv_type, hnd->flags.bits \
-    // ); \
 
 // Requests require no initialization on the uv side.
 #define malloc_req(uv_type, hnd, cb, ...) \
@@ -202,7 +195,6 @@ declare_uv_req_base(uv_req);
 #define kk_uv_setup_callback(uv_t, hnd, status, cb, call_uv_expr, on_error, drops) \
   status = call_uv_expr; \
   if (status != UV_OK) { \
-    kk_warning_message("kk_uv_setup_callback status=%d\n", status); \
     kk_uv_handle_t* raw_hnd = kk_##uv_t##_as_req(hnd); \
     cb = kk_uv_any_take_callback(kk_uv_req_as_any(raw_hnd)); \
     do drops while(0); \
@@ -369,8 +361,8 @@ static void kk_uv_req_drop_references(kk_uv_req_t *hnd, kk_context_t *_ctx) {
 // free a request type (immediately)
 __attribute__((unused))
 static void kk_uv_req_drop(kk_uv_req_t *hnd, kk_context_t *_ctx) {
-  kk_warning_message("[kk_uv_req_drop] dropping uv request %p of type %x with flags %x\n",
-    hnd, hnd->uv.type, hnd->flags.bits);
+  // kk_warning_message("[kk_uv_req_drop] dropping uv request %p of type %x with flags %x\n",
+  //   hnd, hnd->uv.type, hnd->flags.bits);
   kk_uv_req_drop_references(hnd, _ctx);
   kk_free(hnd, _ctx);
 }
@@ -380,7 +372,7 @@ __attribute__((unused))
 static void kk_uv_handle_close_cb(uv_handle_t* uvhnd) {
   kk_context_t* _ctx = kk_get_context();
   kk_uv_handle_t* kk_hnd = uv_handle_as_kk(uvhnd);
-  kk_warning_message("[kk_uv_handle_close_cb] CLOSED uv handle of type %d\n", uvhnd->type);
+  // kk_warning_message("[kk_uv_handle_close_cb] CLOSED uv handle of type %d\n", uvhnd->type);
   kk_free(kk_hnd, _ctx);
 }
 
