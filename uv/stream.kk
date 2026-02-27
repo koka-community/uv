@@ -58,16 +58,6 @@ pub extern read-stop(^stream: uv-stream): io-noexn uv-status-code
 pub extern stream/write(^stream: uv-stream, data: vector<bytes>, callback: (uv-status-code) -> io-noexn ()): io-noexn ()
   c "kk_uv_write"
 
-// TESTING
-pub extern stream/use-async(^stream: uv-stream, callback: () -> io-noexn ()): io-noexn ()
-  c "kk_uv_use"
-
-pub extern stream/print-refcount(^stream: uv-stream): io-noexn ()
-  c "kk_uv_print_refcount"
-
-pub extern stream/tty-init(fd: int32): error<uv-stream>
-  c "kk_uv_tty_init"
-
 // // Extended write function for sending handles over a pipe.
 // // The pipe must be initialized with ipc == 1.
 // // send_handle must be a TCP, pipe and UDP handle on Unix, or a TCP handle on Windows, which is a server or a connection (listening or connected state). Bound sockets or pipes will be assumed to be servers.

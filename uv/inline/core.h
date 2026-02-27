@@ -407,7 +407,7 @@ static void kk_uv_handle_close_cb(uv_handle_t* uvhnd) {
 __attribute__((unused))
 static void kk_uv_handle_free_fn(void *p, kk_block_t *block, kk_context_t *_ctx) {
   kk_uv_handle_t* hnd = (kk_uv_handle_t*)p;
-  kk_warning_message("Closing uv handle of type %d with flags %x\n",
+  kk_warning_message("[kk_uv_handle_free_fn] Closing uv handle of type %d with flags %x\n",
     hnd->uv.type, hnd->flags.bits);
   uv_close(&hnd->uv, kk_uv_handle_close_cb);
 }

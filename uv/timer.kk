@@ -36,12 +36,20 @@ fun unwrap-or-abort(err: error<a>): io-noexn a
     Ok(a) -> a
     Error(err) -> impossible("[uv abort] " ++ err.message)
 
+fun drop(obj) ()
+
 // Sets a timeout for libuv / javscript / C# event loops
 pub fun set-timeout(cb : () -> io-noexn (), ms : int32 ) : io-noexn any
   val timer = timer-init().unwrap-or-abort
   timer.timer-start(ms.int64, 0.int64, fn(status) ->
     val () = status.to-error(()).unwrap-or-abort
-    timer.close() // ignore error, this mostly exists to prevent premature disposal
+
+    // Force timer to remain live until this point.
+    // Note that the caller may also hold its own reference, so
+    // we don't actually want to close() it forcefully.
+    // TODO make sure this doesn't get optimised out?
+    drop(timer)
+
     cb()
   )
   timer.internal
