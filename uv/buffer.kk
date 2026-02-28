@@ -1,6 +1,6 @@
 module uv/buffer
 
-import uv/core
+import uv/handle
 
 extern import
   c file "inline/buffer"

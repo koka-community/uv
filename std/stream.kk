@@ -1,7 +1,6 @@
 module std/stream
 
 pub import uv/stream
-import uv/core
 import std/async/async
 import std/core/bytes
 

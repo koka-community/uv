@@ -8,7 +8,6 @@
 
 module uv/pipe
 pub import std/core/bytes
-pub import uv/core
 import uv/stream
 
 extern import

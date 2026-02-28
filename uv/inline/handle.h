@@ -7,15 +7,8 @@
 // ------------------------------
 
 #define UV_OK 0
-#define kk_uv_status_code_t kk_uv_status_dash_code__uv_status_code
-#define kk_uv_status_code(i, _ctx) kk_uv_status_dash_code_int_fs_status_code(i, _ctx)
-
-// ------------------------------
-// Event loop
-// ------------------------------
-static kk_decl_thread uv_loop_t* kk_uv_loop_default;
-void kk_set_uv_loop(uv_loop_t* loop);
-uv_loop_t* uvloop();
+#define kk_uv_status_code_t kk_uv_utils__uv_status_code
+#define kk_uv_status_code(i, _ctx) kk_uv_utils_int_fs_status_code(i, _ctx)
 
 // ------------------------------
 // Handle flags
@@ -285,11 +278,11 @@ static kk_box_t kk_uv_handle_dup_box(kk_uv_handle_t* hnd, kk_context_t* _ctx) {
 __attribute__((unused))
 static kk_std_core_exn__error kk_status_error(int status, kk_context_t* _ctx) {
   kk_uv_status_code_t code = kk_uv_status_code(status, _ctx);
-  kk_string_t msg = kk_uv_status_dash_code_message(code, _ctx);
+  kk_string_t msg = kk_uv_utils_message(code, _ctx);
   return kk_std_core_exn__new_Error(
     kk_std_core_exn__new_Exception(
       msg,
-      kk_uv_status_dash_code__new_AsyncExn(kk_reuse_null, 0, code, _ctx),
+      kk_uv_utils__new_AsyncExn(kk_reuse_null, 0, code, _ctx),
       _ctx),
     _ctx);
 }
@@ -304,10 +297,6 @@ __attribute__((unused))
 // Helpers for invoking callbacks
 // with common argument types
 // ------------------------------
-__attribute__((unused))
-static void kk_unit_callback(kk_function_t callback, kk_context_t* _ctx) {
-  kk_function_call(kk_unit_t, (kk_function_t, kk_context_t*), callback, (callback, _ctx), _ctx);
-}
 
 __attribute__((unused))
 static void kk_status_code_callback(kk_function_t callback, int status, kk_context_t* _ctx) {

@@ -1,7 +1,5 @@
-import uv/core
+import uv/event-loop
 import uv/pipe
-// import uv/net"
-import uv/core
 import uv/stream
 import std/stream
 import std/test
@@ -20,7 +18,7 @@ fun tapprint(t: t, desc: string, ?show: t -> string): <expect> t
   t
 
 fun main()
-  with handle-loop
+  with default-event-loop
   with async/handle
   run-tests(suite)
 

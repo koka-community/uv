@@ -1,6 +1,5 @@
 import std/test
 import std/async/async
-import uv/core
 import uv/timer
 import std/os/process
 
