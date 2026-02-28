@@ -33,3 +33,13 @@ All operations with Koka callbacks (anything asynchronous), needs to store the c
 
 ### Details for multi-threading / multi-processing:
 -- TODO
+
+### Compiler version required
+
+This library requires the following branches of the koka compiler, merged together:
+
+- [timbertson/uv-basics](https://github.com/koka-lang/koka/pull/852)
+  - core uv bindings - event loop & timers
+  - (based on TimWhiting/uv-basics)
+- [TimWhiting/bytes-prim](https://github.com/koka-lang/koka/pull/652)
+  - raw bytes types
