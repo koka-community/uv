@@ -7,6 +7,7 @@ import std/async/async
 import std/num/int32
 import std/time/duration
 import uv/timer // settimeout
+import uv/tcp
 
 fun error/show(e: error<t>, ?t/show: t -> string): string
   match e
@@ -37,56 +38,62 @@ fun suite()
       println("returning output: " ++ output)
       output
 
-  // effectful-test("reading & writing a socket")
-  //   expect(("hello!", "pong: hello!"))
-  //     val server: uv-tcp = tcp-init().untry
-  //     val bind-addr = Sock-addr(
-  //       family = AF_INET,
-  //       data = "127.0.0.1",
-  //       port = Nothing
-  //     )
-  //     hint("binding to: " ++ bind-addr.show)
-  //     server.bind(bind-addr, 0.int32).tapprint("bind").untry
-  //     hint("server: bound...")
-  //     val server-addr = server.get-sockname.tapprint("get-sockname").untry
-  //     val server-port = server-addr.port.unjust
-  //     hint("server: running on port " ++ server-port.show)
-  //     val server-stream = server.stream()
-  //     with finally { server-stream.close() }
+  effectful-test("reading & writing a socket")
+    expect(("hello!", "pong: hello!"))
+      val server: tcp = tcp-init().untry
+      val bind-addr = Sock-addr(
+        family = AF_INET,
+        data = "127.0.0.1",
+        port = Nothing
+      )
+      hint("binding to: " ++ bind-addr.show)
+      server.bind(bind-addr, 0.int32).tapprint("bind").untry
+      hint("server: bound...")
+      val server-addr = server.get-sockname.tapprint("get-sockname").untry
+      val server-port = server-addr.port.unjust
+      hint("server: running on port " ++ server-port.show)
+      val server-stream = server.uv-stream()
+      with finally {
+        hint("closing server-stream")
+        server-stream.close().untry
+      }
 
-  //     interleaved(
-  //       {
-  //         // Note: only works for 1 connection
-  //         val () = await1(fn(cb) server-stream.listen(1.int32, cb)).tapprint("listen").untry
-  //         hint("server: saw connection")
-  //         val client = tcp-init().untry
-  //         val client-stream = client.stream()
-  //         hint("server: accepting")
-  //         server-stream.accept(client-stream)
-  //         hint("server: reading client input")
-  //         val input = client-stream.read-all()
-  //         hint("server: responding to: " ++ input.string)
-  //         client-stream.write("pong: " ++ input.string)
-  //         val () = await1(fn(cb) client-stream.shutdown(cb)).untry
+      interleaved(
+        {
+          // Note: only works for 1 connection
+          val () = await1(fn(cb) server-stream.listen(1.int32, cb)).tapprint("listen").untry
+          hint("server: saw connection")
+          val client = tcp-init().untry
+          val client-stream = client.uv-stream()
+          hint("server: accepting")
+          server-stream.accept(client-stream)
+          hint("server: reading client input")
+          val input = client-stream.read-all()
+          hint("server: responding to: " ++ input.string)
+          client-stream.write("pong: " ++ input.string)
+          hint("server: shutting down client-stream")
+          val () = await1(fn(cb) client-stream.shutdown(cb)).untry
 
-  //         // is this necessary?
-  //         client.stream.close()
+          hint("server: closing client stream")
+          client.uv-stream.close().untry
+
+          input.string
+        },
+        {
+          val client = tcp-init().untry
+          val client-stream = client.uv-stream()
+          hint("client: connecting to port " ++ server-port.show ++ " ...")
+          val () = await1(fn(cb) client.connect(server-addr, cb)).untry
+          hint("client: connected to server")
+          client-stream.write("hello!")
+          hint("client: shutting down client-stream")
+          val () = await1(fn(cb) client-stream.shutdown(cb)).untry
+          hint("client: reading response")
+          val output = client-stream.read-all()
+
+          hint("client: closing client stream")
+          client.uv-stream.close().untry
           
-  //         input.string
-  //       },
-  //       {
-  //         val client = tcp-init().untry
-  //         val client-stream = client.stream()
-  //         hint("client: connecting to port " ++ server-port.show ++ " ...")
-  //         val () = await1(fn(cb) client.tcp/connect(server-addr, cb)).untry
-  //         hint("client: connected to server")
-  //         client-stream.write("hello!")
-  //         val () = await1(fn(cb) client-stream.shutdown(cb)).untry
-  //         val output = client-stream.read-all()
-
-  //         // is this necessary?
-  //         client.stream.close()
-          
-  //         output.string
-  //       }
-  //     )
+          output.string
+        }
+      )

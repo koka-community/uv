@@ -1,4 +1,6 @@
 declare_uv_req(uv_write);
+declare_uv_req(uv_shutdown);
+declare_uv_req(uv_connect);
 
 void kk_uv_alloc_callback(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   kk_context_t* _ctx = kk_get_context();
@@ -147,4 +149,48 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
     kk_free(write, _ctx);
     kk_status_code_callback(cb, status, _ctx);
   }
+}
+
+static void kk_uv_connection_callback(uv_stream_t* uv_stream, int status){
+  kk_context_t* _ctx = kk_get_context();
+  kk_uv_stream_t* kk_stream = uv_stream_as_kk(uv_stream);
+  kk_function_t callback = kk_uv_any_take_callback(kk_uv_stream_as_any(kk_stream));
+  kk_status_code_callback(callback, status, _ctx);
+}
+
+static void kk_uv_listen(kk_uv_stream__uv_stream stream, int32_t backlog, kk_function_t callback, kk_context_t* _ctx){
+  kk_uv_stream_t* kk_stream = kk_uv_stream_unbox_borrowed(stream.internal, _ctx);
+  kk_uv_handle_t* kk_handle = kk_uv_stream_as_handle(kk_stream);
+  int status = kk_uv_handle_try_set_callback(kk_handle, callback, _ctx);
+  if (status == UV_OK) {
+    status = uv_listen(&kk_stream->uv, backlog, kk_uv_connection_callback);
+  }
+  if (status != UV_OK) {
+    callback = kk_uv_handle_take_callback(kk_handle);
+    kk_status_code_callback(callback, status, _ctx);
+  }
+}
+
+static kk_uv_status_code_t kk_uv_accept(kk_uv_stream__uv_stream server, kk_uv_stream__uv_stream client, kk_context_t* _ctx) {
+  kk_uv_stream_t* kk_server = kk_uv_stream_unbox_borrowed(server.internal, _ctx);
+  kk_uv_stream_t* kk_client = kk_uv_stream_unbox_borrowed(client.internal, _ctx);
+  return kk_uv_status_code(
+    uv_accept(&kk_server->uv, &kk_client->uv),
+    _ctx
+  );
+}
+
+static void kk_uv_shutdown_callback(uv_shutdown_t* uv_shutdown, int status){
+  kk_context_t* _ctx = kk_get_context();
+  kk_uv_shutdown_t* kk_shutdown = uv_shutdown_as_kk(uv_shutdown);
+  kk_uv_req_t* kk_req = kk_uv_shutdown_as_req(kk_shutdown);
+  kk_function_t callback = kk_uv_req_take_callback(kk_req);
+  kk_uv_req_drop(kk_req, _ctx);
+  kk_status_code_callback(callback, status, _ctx);
+}
+
+static void kk_uv_shutdown(kk_uv_stream__uv_stream stream, kk_function_t callback, kk_context_t* _ctx){
+  kk_uv_stream_t* kk_stream = kk_uv_stream_unbox_borrowed(stream.internal, _ctx);
+  malloc_req(uv_shutdown, kk_shutdown, callback);
+  uv_shutdown(&kk_shutdown->uv, &kk_stream->uv, kk_uv_shutdown_callback);
 }
