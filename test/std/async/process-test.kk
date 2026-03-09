@@ -1,8 +1,10 @@
 import uv/event-loop
 import std/num/int32
 import std/async/process
+import std/stream
 import std/test
 import std/async/async
+import uv/pipe
 
 fun main()
   with default-event-loop
@@ -52,3 +54,17 @@ fun suite()
       val c = command("echo", ["1", "2", "words with     many spaces"], output=capture-stdout)
       c.run(fn(p) p.output)
     }
+
+  effectful-test("stdin/out pipes")
+    expect("hello!")
+      val (readable, writable) = mkpipe().untry
+      val c = command("cat", [], output = capture-stdout).with-input(readable)
+      c.run fn(p)
+        val (_, output) = interleaved(
+          {
+            writable.write("hello!")
+            writable.close()
+          },
+          { p.output }
+        )
+        output

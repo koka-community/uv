@@ -34,28 +34,31 @@ pub fun command/show(command: command)
 type child-input
   Ignore-input
   Inherit-input
+  Stream-input(stream: uv-stream)
 
 pub val input/default = Inherit-input
 pub val input/inherit: child-input = Inherit-input
 pub val input/ignore: child-input = Ignore-input
 
 pub fun command/with-output(cmd: command, output: child-output) cmd(output = output)
+pub fun command/with-input(cmd: command, input: uv-stream) cmd(input = Stream-input(input))
 
 type child-output-stream
   Ignore-output
-  Inerhit-output
+  Inherit-output
   Capture-output
-  // Output-to(pipe)
+  // Output-to(stream: uv-stream)
 
 type child-output
   // Capture-merged
   // Merge-output-to(pipe)
   Split(stdout: child-output-stream, stderr: child-output-stream)
 
-pub val output/default: child-output = Split(Inerhit-output, Inerhit-output)
-pub val output/inherit: child-output = Split(Inerhit-output, Inerhit-output)
+pub val output/default: child-output = Split(Inherit-output, Inherit-output)
+pub val output/inherit: child-output = Split(Inherit-output, Inherit-output)
 pub val output/ignore: child-output = Split(Ignore-output, Ignore-output)
-pub val const/capture-stdout: child-output = Split(Capture-output, Inerhit-output)
+// pub fun const/stdout-stream(stream): child-output { Split(Output-to(stream), Inherit-output) }
+pub val const/capture-stdout: child-output = Split(Capture-output, Inherit-output)
 pub val const/capture-outputs: child-output = Split(Capture-output, Capture-output)
 // pub val const/capture-merged: child-output = Capture-merged
 
@@ -104,8 +107,9 @@ pub fun exit/(==)(a: exit, b: exit): div bool
 
 fun stdio-stream-of-output(output: child-output-stream, inherit-fd): asyncx (stdio-stream, maybe<io-stream>)
   match output
+    // Output-to(stream) -> (Stream-)
     Ignore-output -> (Stream-ignore, Nothing)
-    Inerhit-output -> (Stream-fd(inherit-fd), Nothing)
+    Inherit-output -> (Stream-fd(inherit-fd), Nothing)
     Capture-output ->
       val (readable, writable) = mkpipe().untry
       (Stream-uv(writable), Just(readable))
@@ -181,6 +185,7 @@ pub fun run(
   val uv-stdin = match command.input
     Ignore-input -> Stream-ignore
     Inherit-input -> Stream-fd(0.int32)
+    Stream-input(stream) -> Stream-uv(stream)
 
   val ((uv-stdout, stdout-stream), (uv-stderr, stderr-stream)) = match command.output
     Split(out, err) ->
