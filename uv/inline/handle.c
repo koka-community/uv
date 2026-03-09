@@ -10,9 +10,7 @@ static kk_uv_status_code_t kk_uv_handle_close_impl(kk_uv_utils__uv_handle handle
   // handles are closed on drop. If `handle` is not the last unique reference,
   // return EBUSY to indicate a programmer error
   int status = UV_OK;
-  if (kk_block_is_unique(kk_box_to_ptr(handle.internal, kk_context()))) {
-    kk_warning_message("Dropping last reference to handle of type %d\n", uv_hnd->uv.type);
-  } else {
+  if (!kk_block_is_unique(kk_box_to_ptr(handle.internal, kk_context()))) {
     kk_warning_message(
       "Handle of type %d @ %p is still referenced (refcount %d); not dropping\n",
       uv_hnd->uv.type,
@@ -20,6 +18,8 @@ static kk_uv_status_code_t kk_uv_handle_close_impl(kk_uv_utils__uv_handle handle
       kk_block_refcount(kk_box_to_ptr(handle.internal, kk_context()))
     );
     status = UV_EBUSY;
+  // } else {
+    // kk_warning_message("Dropping last reference to handle of type %d\n", uv_hnd->uv.type);
   }
   kk_uv_utils__uv_handle_drop(handle, _ctx);
   return kk_uv_status_code(status, _ctx);

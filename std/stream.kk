@@ -15,21 +15,12 @@ pub fun read-all(^stream): <io,async> bytes
 
   await1 fn(complete)
     stream.read-start fn(chunk)
-      println("READ CHUNK (error?): " ++ chunk.is-error.show)
       match chunk
         Error(e) -> complete(Error(e))
-        Ok(Nothing) -> {
-          println("read-all complete (len=" ++ (!result).bytes/length.int.show ++ ")")
-          complete(Ok(!result))
-        }
+        Ok(Nothing) -> complete(Ok(!result))
         Ok(Just(chunk)) -> result := !result ++ chunk
   .untry
 
 
 pub fun write(^stream: io-stream, data: string): <asyncx> ()
-  await1(fn(cb)
-    val cb2 = fn(result: uv-status-code)
-      println("WRITE RESULT: " ++ result.show)
-      cb(result)
-    stream.stream/write([data.bytes].vector, cb2)
-  ).untry
+  await1(fn(cb) stream.stream/write([data.bytes].vector, cb)).untry

@@ -89,8 +89,9 @@ static kk_std_core_exn__error kk_uv_tcp_getsockname(kk_uv_tcp__tcp tcp, kk_conte
 }
 
 static void kk_uv_tcp_connect_callback(uv_connect_t* uv_connect, int status) {
+  kk_context_t* _ctx = kk_get_context();
   kk_uv_connect_t* kk_connect = uv_connect_as_kk(uv_connect);
-  kk_function_t callback = kk_uv_any_take_callback(kk_uv_connect_as_any(kk_connect));
+  kk_function_t callback = kk_uv_any_take_callback(kk_uv_connect_as_any(kk_connect), _ctx);
   kk_status_code_callback(callback, status, kk_get_context());
 }
 
@@ -107,7 +108,7 @@ static void kk_uv_tcp_connect_c(kk_uv_tcp__tcp tcp, kk_uv_tcp__sock_addr addr, k
   status = uv_tcp_connect(&connect->uv, &kk_tcp->uv, (struct sockaddr*)&sockaddr, kk_uv_tcp_connect_callback);
   if (status != UV_OK) {
     kk_uv_req_t* req = kk_uv_connect_as_req(connect);
-    callback = kk_uv_req_take_callback(req);
+    callback = kk_uv_req_take_callback(req, _ctx);
     kk_uv_req_drop(req, _ctx);
     kk_status_code_callback(callback, status, _ctx);
   }

@@ -49,7 +49,7 @@ static void kk_uv_process_exit_callback(uv_process_t* process, int64_t exit_stat
   kk_context_t* _ctx = kk_get_context();
   kk_uv_process_t* kk_process = uv_process_as_kk(process);
   kk_uv_handle_t* kk_handle = kk_uv_process_as_handle(kk_process);
-  kk_function_t callback = kk_uv_handle_take_callback(kk_uv_process_as_handle(kk_process));
+  kk_function_t callback = kk_uv_handle_take_callback(kk_uv_process_as_handle(kk_process), _ctx);
   kk_function_call(kk_unit_t, (kk_function_t, int64_t, int32_t, kk_context_t*),
                    callback,
                    (callback, exit_status, (int32_t)term_signal, _ctx),
@@ -88,6 +88,8 @@ static uv_stdio_container_t kk_convert_to_stdio_container(
   return result;
 }
 
+// Note that the returned process MUST NOT be dropped until after the process has
+// exited; that would result in use-after-free when UV callbacks are invoked.
 static kk_std_core_exn__error kk_uv_proc_spawn_c(
   kk_uv_process__uv_command kk_command,
   kk_function_t on_complete,
@@ -128,11 +130,9 @@ static kk_std_core_exn__error kk_uv_proc_spawn_c(
     // A running process owns its own handle until it's exited.
     // so that if the user drops the handle before execution is complete, the handle won't be
     // freed before the process ends.
-    kk_box_t kk_any_box = kk_uv_process_box(kk_process, _ctx);
-    kk_uv_handle_set_box(kk_uv_process_as_handle(kk_process), kk_box_dup(kk_any_box, _ctx), _ctx);
     return kk_std_core_exn__new_Ok(
       kk_uv_process__uv_process_box(
-        kk_uv_process__new_Uv_process(kk_any_box, _ctx),
+        kk_uv_process__new_Uv_process(kk_uv_process_box(kk_process, _ctx), _ctx),
         _ctx),
       _ctx
     );

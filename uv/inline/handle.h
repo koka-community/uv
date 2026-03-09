@@ -11,49 +11,11 @@
 #define kk_uv_status_code(i, _ctx) kk_uv_utils_int_fs_status_code(i, _ctx)
 
 // ------------------------------
-// Handle flags
-// ------------------------------
-typedef struct kk_uv_flags_s {
-  char bits;
-  // HANDLE, CALLBACK etc
-} kk_uv_flags_t;
-
-#define NULL_FLAGS = 0
-#define BOX_BIT 1 // TODO move box into req->data?
-#define CALLBACK_BIT (1 << 1)
-// TODO: no need for this? All handles are refcounted
-#define REFCOUNTED_BIT (1 << 2)
-
-static inline char has_box(kk_uv_flags_t flags) {
-  return flags.bits & BOX_BIT;
-}
-
-static inline char has_callback(kk_uv_flags_t flags) {
-  return flags.bits & CALLBACK_BIT;
-}
-
-// whether `box` points to the koka refcounted version of `self`
-// (if unset, `box` may still be populated to some related structure)
-static inline char is_refcounted(kk_uv_flags_t flags) {
-  return flags.bits & REFCOUNTED_BIT;
-}
-
-#define init_flags(flags) \
-  (flags).bits = 0
-
-#define set_flag(flags, flag) \
-  (flags).bits = (flags).bits | flag##_BIT
-
-#define clear_flag(flags, flag) \
-  (flags).bits = (flags).bits & ~(flag##_BIT)
-
-// ------------------------------
 // Handle datastructures
 // ------------------------------
 
 // Every UV type we use has a corresponding wrapper, which embeds the UV structure
 // as well as a common preamble for storing references to callbacks, etc.
-// The `flags` field describes which of these are set, since not all fields are needed in all cases.
 //
 // This macro also defines typed conversions for:
 // - getting a pointer to the kk wrapper given a raw uv pointer (_as_kk)
@@ -66,9 +28,7 @@ static inline char is_refcounted(kk_uv_flags_t flags) {
 // have the same function work on handles/requests. Maybe that's fine though?
 #define declare_uv_handle_base(uv_type) \
   typedef struct kk_##uv_type##_s { \
-    kk_uv_flags_t flags; \
     kk_function_t callback; \
-    kk_box_t box; \
     uv_type##_t uv; \
   } kk_##uv_type##_t; \
   __attribute__((unused)) \
@@ -87,17 +47,18 @@ static inline char is_refcounted(kk_uv_flags_t flags) {
 // kk_uv requests and handles share a comon prefix of fields. Used for manipulating an
 // attached callback
 typedef struct kk_uv_any_s {
-  kk_uv_flags_t flags;
   kk_function_t callback;
 } kk_uv_any_t;
+
+static inline char has_callback(kk_uv_any_t* handle, kk_context_t* _ctx) {
+  return !kk_function_is_null(handle->callback, _ctx);
+}
 
 // A request is similar to a handle, but don't have a `box` self-reference.
 // Requests don't participate in reference counting, they are freed when the operation
 // completes or is canceled.
-// TODO: is `flags` needed? I think we can use kk_function_null instead
 #define declare_uv_req_base(uv_type) \
   typedef struct kk_##uv_type##_s { \
-    kk_uv_flags_t flags; \
     kk_function_t callback; \
     uv_type##_t uv; \
   } kk_##uv_type##_t; \
@@ -168,14 +129,11 @@ declare_uv_req_base(uv_req);
 // On error, the handle is freed and no action is needed from the caller.
 #define malloc_and_init_handle(uv_type, hnd, status, ...) \
   malloc_and_init_raw(uv_type, hnd, status, __VA_ARGS__); \
-  if (status == UV_OK) { \
-    hnd->flags.bits = REFCOUNTED_BIT; \
-  }
+  hnd->callback = kk_function_null(_ctx);
 
 // Requests require no initialization on the uv side.
 #define malloc_req(uv_type, hnd, cb, ...) \
   kk_##uv_type##_t* hnd = kk_malloc(sizeof(kk_##uv_type##_t), _ctx); \
-  hnd->flags.bits = CALLBACK_BIT; \
   hnd->callback = cb;
 
 // ------------------------------
@@ -204,18 +162,19 @@ declare_uv_req_base(uv_req);
 
 // Remove the callback from the handle and return it
 __attribute__((unused))
-static kk_function_t kk_uv_any_take_callback(kk_uv_any_t* hnd) {
-  kk_assert(has_callback(hnd->flags));
-  clear_flag(hnd->flags, CALLBACK);
-  return hnd->callback;
+static kk_function_t kk_uv_any_take_callback(kk_uv_any_t* hnd, kk_context_t* _ctx) {
+  kk_assert(has_callback(hnd, _ctx));
+  kk_function_t cb = hnd->callback;
+  hnd->callback = kk_function_null(_ctx);
+  return cb;
 }
-#define kk_uv_handle_take_callback(hnd) kk_uv_any_take_callback(kk_uv_handle_as_any(hnd))
-#define kk_uv_req_take_callback(hnd) kk_uv_any_take_callback(kk_uv_req_as_any(hnd))
+#define kk_uv_handle_take_callback(hnd, _ctx) kk_uv_any_take_callback(kk_uv_handle_as_any(hnd), _ctx)
+#define kk_uv_req_take_callback(hnd, _ctx) kk_uv_any_take_callback(kk_uv_req_as_any(hnd), _ctx)
 
 // Return a copy of the handle's callback
 __attribute__((unused))
 static kk_function_t kk_uv_any_dup_callback(kk_uv_any_t* hnd, kk_context_t* _ctx) {
-  kk_assert(has_callback(hnd->flags));
+  kk_assert(has_callback(hnd, _ctx));
   return kk_function_dup(hnd->callback, _ctx);
 }
 #define kk_uv_handle_dup_callback(hnd, _ctx) kk_uv_any_dup_callback(kk_uv_handle_as_any(hnd), _ctx)
@@ -224,8 +183,7 @@ static kk_function_t kk_uv_any_dup_callback(kk_uv_any_t* hnd, kk_context_t* _ctx
 // Set the handle's callback. Aborts if handle is already set
 __attribute__((unused))
 static void kk_uv_any_set_callback(kk_uv_any_t* hnd, kk_function_t callback, kk_context_t* _ctx) {
-  kk_assert(!has_callback(hnd->flags));
-  set_flag(hnd->flags, CALLBACK);
+  kk_assert(!has_callback(hnd, _ctx));
   hnd->callback = callback;
 }
 
@@ -235,7 +193,7 @@ static void kk_uv_any_set_callback(kk_uv_any_t* hnd, kk_function_t callback, kk_
 // Set the handle's callback. Returns EBUSY if already set.
 __attribute__((unused))
 static int kk_uv_any_try_set_callback(kk_uv_any_t* hnd, kk_function_t callback, kk_context_t* _ctx) {
-  if (has_callback(hnd->flags)) {
+  if (has_callback(hnd, _ctx)) {
     return UV_EBUSY;
   } else {
     kk_uv_any_set_callback(hnd, callback, _ctx);
@@ -245,30 +203,6 @@ static int kk_uv_any_try_set_callback(kk_uv_any_t* hnd, kk_function_t callback, 
 
 #define kk_uv_handle_try_set_callback(hnd, cb, _ctx) kk_uv_any_try_set_callback(kk_uv_handle_as_any(hnd), cb, _ctx)
 #define kk_uv_req_try_set_callback(hnd, cb, _ctx) kk_uv_any_try_set_callback(kk_uv_req_as_any(hnd), cb, _ctx)
-
-__attribute__((unused))
-static void kk_uv_handle_set_box(kk_uv_handle_t* hnd, kk_box_t box, kk_context_t* _ctx) {
-  kk_assert(!is_refcounted(hnd->flags));
-  if (has_box(hnd->flags)) {
-    kk_box_drop(hnd->box, _ctx);
-  } else {
-    set_flag(hnd->flags, BOX);
-  }
-  hnd->box = box;
-}
-
-__attribute__((unused))
-static kk_box_t kk_uv_handle_take_box(kk_uv_handle_t* hnd, kk_context_t* _ctx) {
-  kk_assert(!is_refcounted(hnd->flags) && has_box(hnd->flags));
-  clear_flag(hnd->flags, BOX);
-  return hnd->box;
-}
-
-__attribute__((unused))
-static kk_box_t kk_uv_handle_dup_box(kk_uv_handle_t* hnd, kk_context_t* _ctx) {
-  kk_assert(has_box(hnd->flags));
-  return kk_box_dup(hnd->box, _ctx);
-}
 
 // ------------------------------
 // Error / exception helpers
@@ -327,14 +261,9 @@ static void kk_uv_error_callback(kk_function_t callback, kk_std_core_exn__error 
 // until the last reference is dropped and the free_fn is invoked.
 __attribute__((unused))
 static void kk_uv_handle_drop_references(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
-  if (has_callback(hnd->flags)) {
-    clear_flag(hnd->flags, CALLBACK);
+  if (has_callback(kk_uv_handle_as_any(hnd), _ctx)) {
     kk_function_drop(hnd->callback, _ctx);
-  }
-
-  if (has_box(hnd->flags)) {
-    clear_flag(hnd->flags, BOX);
-    kk_box_drop(hnd->box, _ctx);
+    hnd->callback = kk_function_null(_ctx);
   }
 }
 
@@ -347,8 +276,6 @@ static void kk_uv_req_drop_references(kk_uv_req_t *hnd, kk_context_t *_ctx) {
 // free a request type (immediately)
 __attribute__((unused))
 static void kk_uv_req_drop(kk_uv_req_t *hnd, kk_context_t *_ctx) {
-  // kk_warning_message("[kk_uv_req_drop] dropping uv request %p of type %x with flags %x\n",
-  //   hnd, hnd->uv.type, hnd->flags.bits);
   kk_uv_req_drop_references(hnd, _ctx);
   kk_free(hnd, _ctx);
 }
@@ -362,30 +289,11 @@ static void kk_uv_handle_close_cb(uv_handle_t* uvhnd) {
   kk_free(kk_hnd, _ctx);
 }
 
-// // Drop a refcounted handle. Only used in error paths when init fails, otherwise
-// // uv_close is needed.
-// __attribute__((unused))
-// static void kk_uv_handle_drop_uninitialized(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
-//   kk_warning_message("kk_uv_handle_drop: removing box? %d\n", has_box(hnd->flags));
-//   if (has_box(hnd->flags)) {
-//     // This invoke kk_uv_free_fn (or equivalent) if
-//     // this is the last reference.
-//     clear_flag(hnd->flags, BOX);
-//     kk_box_drop(hnd->box, _ctx);
-//   }
-
-// //   kk_warning_message("Dropping uv box %p of type %x with flags %x\n",
-// //     hnd, hnd->uv.type, hnd->flags.bits);
-// //   kk_box_drop(hnd->box, _ctx);
-// }
-
 // Free function used for refcounted handles.
 // Triggers a uv_close, the object will be freed only
 // once that completes.
 __attribute__((unused))
 static void kk_uv_handle_free_fn(void *p, kk_block_t *block, kk_context_t *_ctx) {
   kk_uv_handle_t* hnd = (kk_uv_handle_t*)p;
-  kk_warning_message("[kk_uv_handle_free_fn] Closing uv handle of type %d with flags %x\n",
-    hnd->uv.type, hnd->flags.bits);
   uv_close(&hnd->uv, kk_uv_handle_close_cb);
 }

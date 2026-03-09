@@ -43,6 +43,8 @@ pub fun uv-handle(process: uv-process): uv-handle
 
 pub alias uv-exit-cb = (status: int64, signal: int32) -> io-noexn ()
 
+// Spawn a process. The resulting value MUST be retained until after
+// the process completes.
 // Note that on-complete will not be invoked if the process can't be spawned
 pub fun spawn(command: uv-command, on-complete: uv-exit-cb): io error<uv-process>
   // https://docs.libuv.org/en/v1.x/process.html

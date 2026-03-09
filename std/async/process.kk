@@ -160,6 +160,11 @@ fun finalize-process(p: process, strategy: kill-strategy): <io,async> ()
       p.kill(strategy)
       ()
 
+  // force process to be retained at least this long
+  // (but ignore UV_EBUSY if there are other references)
+  val _: uv-status-code = p.internal.close()
+  ()
+
 pub fun run-unit(command: command): <io,async|e> ()
   run(command) fn(_) ()
 
