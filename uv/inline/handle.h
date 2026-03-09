@@ -325,9 +325,6 @@ static void kk_uv_error_callback(kk_function_t callback, kk_std_core_exn__error 
 
 // Drop the contents of a uv handle. Freeing won't actually occur
 // until the last reference is dropped and the free_fn is invoked.
-// This should only be called for:
-//  - kk_uv_handle_close, where it's an error if the handle is still referenced
-//  - error branches, in which case the reference should never have been passed to koka code
 __attribute__((unused))
 static void kk_uv_handle_drop_references(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
   if (has_callback(hnd->flags)) {

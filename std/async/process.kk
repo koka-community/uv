@@ -3,6 +3,7 @@ module std/async/process
 // Note: importing std/async causes clash with set-timeout / clear-timeout
 import std/async/async
 import uv/process
+import uv/event-loop
 import uv/pipe
 import uv/signal
 import std/stream
@@ -125,14 +126,14 @@ fun never(): asyncx a
 
 fun do-kill(process: process, strategy: kill-strategy): <io,async> ()
   match strategy
-    Signal-once -> process.signal(sSIGINT)
+    Signal-once -> process.signal(sig-int)
     Signal-repeat(signum, wait-time) ->
       while { True }
         process.signal(signum)
         // TODO: async/wait should work?
         duration/wait(wait-time)
     Signal-escalate(wait-time) ->
-      [sSIGINT, sSIGQUIT, sSIGKILL].foreach fn(signum)
+      [sig-int, sig-quit, sig-kill].foreach fn(signum)
         process.signal(signum)
         duration/wait(wait-time)
 
@@ -148,15 +149,12 @@ pub fun kill(process: process, strategy: kill-strategy = default): <io,async> ex
 pub fun signal(process: process, sig: int32): <io,async> ()
   uv/process/signal(process.internal, sig)
 
-fun finalize-process(p, strategy: kill-strategy)
+fun finalize-process(p: process, strategy: kill-strategy): <io,async> ()
   match p.exit-p.try-await
     Just(_) -> ()
     Nothing ->
       p.kill(strategy)
       ()
-
-  p.output-streams.stdout.foreach(stream/close)
-  p.output-streams.stderr.foreach(stream/close)
 
 pub fun run-unit(command: command): <io,async|e> ()
   run(command) fn(_) ()
@@ -209,7 +207,7 @@ pub fun run(
     stdout = uv-stdout,
     stderr = uv-stderr
   )
-  val uv-process = spawn(uv-cmd, on-exit)
+  val uv-process = spawn(uv-cmd, on-exit).untry
   val process = Process(uv-process, exit-p, Output-streams(stdout-stream, stderr-stream))
   with finally
     // this finalizer will kill the process,
@@ -229,9 +227,9 @@ pub fun run(
     exit/check-exit(exit)
   result
 
-fun close-owned(stream: stdio-stream): asyncx ()
+fun close-owned(stream: stdio-stream): <io,async> ()
   match stream
-    Stream-uv(s) -> s.close()
+    Stream-uv(s) -> s.close().untry
     _ -> ()
 
 pub fun await(process: process): <io,async> exit
