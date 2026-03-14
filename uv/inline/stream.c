@@ -44,7 +44,7 @@ static void kk_uv_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf
           _ctx),
         _ctx);
     } else {
-      result = kk_status_error(nread, _ctx);
+      result = kk_uv_error(nread, _ctx);
     }
     kk_bytes_drop(bytes, _ctx);
   } else {
@@ -116,7 +116,7 @@ static void kk_uv_write_callback(uv_write_t* write, int status){
 
   kk_uv_req_free(kk_any, _ctx);
 
-  kk_status_code_callback(callback, status, _ctx);
+  kk_uv_status_code_callback(callback, status, _ctx);
 }
 
 // Stores `kk_uv_bufs*` in write->data, freed by `kk_uv_write_callback`
@@ -141,7 +141,7 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
     kk_uv_bufs_drop(kk_uv_bufs, _ctx);
     cb = kk_uv_any_take_callback(kk_uv_write_as_any(write), _ctx);
     kk_free(write, _ctx);
-    kk_status_code_callback(cb, status, _ctx);
+    kk_uv_status_code_callback(cb, status, _ctx);
   }
 }
 
@@ -149,7 +149,7 @@ static void kk_uv_connection_callback(uv_stream_t* uv_stream, int status){
   kk_context_t* _ctx = kk_get_context();
   kk_uv_stream_t* kk_stream = uv_stream_as_kk(uv_stream);
   kk_function_t callback = kk_uv_any_take_callback(kk_uv_stream_as_any(kk_stream), _ctx);
-  kk_status_code_callback(callback, status, _ctx);
+  kk_uv_status_code_callback(callback, status, _ctx);
 }
 
 static void kk_uv_listen(kk_uv_stream__uv_stream stream, int32_t backlog, kk_function_t callback, kk_context_t* _ctx){
@@ -161,7 +161,7 @@ static void kk_uv_listen(kk_uv_stream__uv_stream stream, int32_t backlog, kk_fun
   }
   if (status != UV_OK) {
     callback = kk_uv_handle_take_callback(kk_handle, _ctx);
-    kk_status_code_callback(callback, status, _ctx);
+    kk_uv_status_code_callback(callback, status, _ctx);
   }
 }
 
@@ -180,7 +180,7 @@ static void kk_uv_shutdown_callback(uv_shutdown_t* uv_shutdown, int status){
   kk_uv_any_t* kk_req = kk_uv_shutdown_as_any(kk_shutdown);
   kk_function_t callback = kk_uv_any_take_callback(kk_req, _ctx);
   kk_uv_req_free(kk_req, _ctx);
-  kk_status_code_callback(callback, status, _ctx);
+  kk_uv_status_code_callback(callback, status, _ctx);
 }
 
 static void kk_uv_shutdown(kk_uv_stream__uv_stream stream, kk_function_t callback, kk_context_t* _ctx){

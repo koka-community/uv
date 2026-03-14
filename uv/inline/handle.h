@@ -172,7 +172,7 @@ static int kk_uv_any_try_set_callback(kk_uv_any_t* hnd, kk_function_t callback, 
 
 // return an error for the given status
 __attribute__((unused))
-static kk_std_core_exn__error kk_status_error(int status, kk_context_t* _ctx) {
+static kk_std_core_exn__error kk_uv_error(int status, kk_context_t* _ctx) {
   kk_uv_status_code_t code = kk_uv_status_code(status, _ctx);
   kk_string_t msg = kk_uv_utils_message(code, _ctx);
   return kk_std_core_exn__new_Error(
@@ -184,8 +184,8 @@ static kk_std_core_exn__error kk_status_error(int status, kk_context_t* _ctx) {
 }
 
 // return `Ok(ok_expr)` if the status is UV_OK, otherwise Error(...)
-#define kk_status_error_or(status, ok_expr, _ctx) \
-  ((status >= 0) ? kk_std_core_exn__new_Ok(ok_expr, _ctx) : kk_status_error(status, _ctx))
+#define kk_uv_error_or(status, ok_expr, _ctx) \
+  ((status >= 0) ? kk_std_core_exn__new_Ok(ok_expr, _ctx) : kk_uv_error(status, _ctx))
 
 
 // ------------------------------
@@ -194,7 +194,7 @@ static kk_std_core_exn__error kk_status_error(int status, kk_context_t* _ctx) {
 // ------------------------------
 
 __attribute__((unused))
-static void kk_status_code_callback(kk_function_t callback, int status, kk_context_t* _ctx) {
+static void kk_uv_status_code_callback(kk_function_t callback, int status, kk_context_t* _ctx) {
   kk_function_call(kk_unit_t,
     (kk_function_t, kk_uv_status_code_t, kk_context_t*),
     callback,
@@ -204,7 +204,7 @@ __attribute__((unused))
 static void kk_uv_error_status_callback(kk_function_t callback, int status, kk_context_t* _ctx) {
   kk_function_call(kk_unit_t,
     (kk_function_t, kk_std_core_exn__error, kk_context_t*),
-    callback, (callback, kk_status_error(status, _ctx), _ctx), _ctx);
+    callback, (callback, kk_uv_error(status, _ctx), _ctx), _ctx);
 }
 
 __attribute__((unused))
@@ -237,8 +237,7 @@ static void kk_uv_req_free(kk_uv_any_t *hnd, kk_context_t *_ctx) {
   kk_free(hnd, _ctx);
 }
 
-// free a request type (immediately),
-// after taking (and then returning) its callback
+// free a request type after taking (and then returning) its callback
 __attribute__((unused))
 static kk_function_t kk_uv_req_take_callback_and_free(kk_uv_any_t *hnd, kk_context_t *_ctx) {
   kk_function_t callback = kk_uv_any_take_callback(hnd, _ctx);

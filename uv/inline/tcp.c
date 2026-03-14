@@ -49,7 +49,7 @@ static kk_std_core_exn__error kk_uv_tcp_init(kk_context_t* _ctx) {
   malloc_and_init_handle(uv_tcp, tcp, status, uvloop(), &tcp->uv);
   if (status != UV_OK) {
     kk_free(tcp, _ctx);
-    return kk_status_error(status, _ctx);
+    return kk_uv_error(status, _ctx);
   } else {
     return kk_std_core_exn__new_Ok(
       kk_uv_tcp__tcp_box(
@@ -82,7 +82,7 @@ static kk_std_core_exn__error kk_uv_tcp_getsockname(kk_uv_tcp__tcp tcp, kk_conte
   struct sockaddr* sockaddr_ptr = (struct sockaddr*)&sockaddr;
 
   int status = uv_tcp_getsockname(&kk_tcp->uv, sockaddr_ptr, &len);
-  return kk_status_error_or(status,
+  return kk_uv_error_or(status,
     kk_uv_tcp__sock_addr_box(to_kk_sockaddr(sockaddr_ptr, _ctx), _ctx),
     _ctx
   );
@@ -92,14 +92,14 @@ static void kk_uv_tcp_connect_callback(uv_connect_t* uv_connect, int status) {
   kk_context_t* _ctx = kk_get_context();
   kk_uv_connect_t* kk_connect = uv_connect_as_kk(uv_connect);
   kk_function_t callback = kk_uv_any_take_callback(kk_uv_connect_as_any(kk_connect), _ctx);
-  kk_status_code_callback(callback, status, kk_get_context());
+  kk_uv_status_code_callback(callback, status, kk_get_context());
 }
 
 static void kk_uv_tcp_connect_c(kk_uv_tcp__tcp tcp, kk_uv_tcp__sock_addr addr, kk_function_t callback, kk_context_t* _ctx) {
   struct sockaddr_storage sockaddr;
   int status = fill_sockaddr(&sockaddr, addr, _ctx);
   if (status != UV_OK) {
-    kk_status_code_callback(callback, status, _ctx);
+    kk_uv_status_code_callback(callback, status, _ctx);
     return;
   }
   
@@ -110,6 +110,6 @@ static void kk_uv_tcp_connect_c(kk_uv_tcp__tcp tcp, kk_uv_tcp__sock_addr addr, k
     kk_uv_req_t* req = kk_uv_connect_as_req(connect);
     callback = kk_uv_req_take_callback(req, _ctx);
     kk_uv_req_free(req, _ctx);
-    kk_status_code_callback(callback, status, _ctx);
+    kk_uv_status_code_callback(callback, status, _ctx);
   }
 }

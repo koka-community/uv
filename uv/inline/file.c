@@ -77,7 +77,7 @@ static void kk_std_os_file_open_cb(uv_fs_t* req) {
   kk_function_t cb = kk_uv_req_take_callback_and_free(uv_fs_as_kk_any(req), _ctx);
 
   kk_uv_error_callback(cb,
-    kk_status_error_or(
+    kk_uv_error_or(
       result,
       kk_uv_file__uv_file_box(
         kk_uv_file__new_Uv_file(uv_file_box(result, _ctx), _ctx),
@@ -107,7 +107,7 @@ static void kk_uv_fs_status_code_cb(uv_fs_t* req) {
   kk_context_t* _ctx = kk_get_context();
   ssize_t result = req->result;
   kk_function_t cb = kk_uv_req_take_callback_and_free(uv_fs_as_kk_any(req), _ctx);
-  kk_status_code_callback(cb, result, _ctx);
+  kk_uv_status_code_callback(cb, result, _ctx);
 }
 
 static void kk_uv_fs_ssize_cb(uv_fs_t* req) {
@@ -115,7 +115,7 @@ static void kk_uv_fs_ssize_cb(uv_fs_t* req) {
   ssize_t result = req->result;
   kk_function_t cb = kk_uv_req_take_callback_and_free(uv_fs_as_kk_any(req), _ctx);
   kk_uv_error_callback(cb,
-    kk_status_error_or(result, kk_ssize_box((kk_ssize_t)result, _ctx), _ctx),
+    kk_uv_error_or(result, kk_ssize_box((kk_ssize_t)result, _ctx), _ctx),
     _ctx
   );
 }
@@ -191,7 +191,7 @@ static void kk_std_os_fs_mkstemp_cb(uv_fs_t* req) {
     );
   } else {
     kk_function_t cb = kk_uv_req_take_callback_and_free(uv_fs_as_kk_any(req), _ctx);
-    kk_uv_error_callback(cb, kk_status_error(status, _ctx), _ctx);
+    kk_uv_error_callback(cb, kk_uv_error(status, _ctx), _ctx);
   }
 }
 

@@ -125,7 +125,7 @@ static kk_std_core_exn__error kk_uv_proc_spawn_c(
     // process was not initialized/spawned; free it (no close needed)
     kk_uv_handle_drop_references(kk_uv_process_as_handle(kk_process), _ctx);
     kk_free(kk_process, _ctx);
-    return kk_status_error(status, _ctx);
+    return kk_uv_error(status, _ctx);
   } else {
     // A running process owns its own handle until it's exited.
     // so that if the user drops the handle before execution is complete, the handle won't be
@@ -147,5 +147,5 @@ static int kk_uv_proc_pid(kk_uv_process__uv_process process, kk_context_t* _ctx)
 static kk_std_core_exn__error kk_uv_proc_signal(kk_uv_process__uv_process process, int32_t kk_signal, kk_context_t* _ctx) {
   kk_uv_process_t* kk_process = kk_uv_process_unbox_borrowed(process.internal, _ctx);
   int status = uv_process_kill(&kk_process->uv, kk_signal);
-  return kk_status_error_or(status, kk_unit_box(kk_Unit), _ctx);
+  return kk_uv_error_or(status, kk_unit_box(kk_Unit), _ctx);
 }
