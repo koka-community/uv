@@ -1,3 +1,5 @@
+module uv/tcp
+
 import uv/handle
 import uv/stream
 import std/num/int32

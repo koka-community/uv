@@ -9,10 +9,11 @@
 // Provides low level file operations using libuv callbacks
 module uv/file
 
+import uv/handle
 pub import std/core/bytes
 pub import std/num/int32
 pub import std/num/int64
-import std/core-extras // for `is-ref-unique`
+pub import uv/utils
 
 extern import
   c file "inline/file.c"
@@ -176,30 +177,33 @@ extern oTMPFILE(): int32
   c inline "UV_FS_O_TEMPORARY"
 
 // A uv filesystem request type
-pub value struct uv-fs-req { internal : any };
+// pub value struct uv-fs-req { internal : any };
 
 // A uv file type
-pub value struct uv-file { internal : intptr_t };
+pub value struct uv-file { internal : any };
 
 // A uv directory type
-pub value struct uv-dir { internal : intptr_t };
+// pub value struct uv-dir { internal : intptr_t };
 
-// Checks that the given file is the last unique reference
-// and thus will be closed, otherwise returns UV_EBUSY
-// TODO: should this be async to wait for actual close completion?
-pub fun uv/close(file: uv-file): io-noexn uv-status-code
-  if is-ref-unique(file.internal) then
-    UV_OK
-  else
-    UV_EBUSY
+// Drops the handle's internal reference, triggering
+// closure of the underlying resource. Returns UV_EBUSY
+// if there are still other references to the handle.
+pub extern close(file: uv-file): io-noexn uv-status-code
+  c "kk_uv_file_close_impl"
 
 // Equivalent to open(2).
 // WARNING: On Windows libuv uses CreateFileW and thus the file is always opened in binary mode. Because of this the O_BINARY and O_TEXT flags are not supported.
-pub extern uv/open(path: string, flags: int32, mode: int32, cb: (error<uv-file>) -> io-noexn ()): io-noexn ()
+pub extern open(path: string, flags: int32, mode: int32, cb: (error<uv-file>) -> io-noexn ()): io-noexn ()
   c "kk_uv_fs_open"
 
-pub fun open(path: string, flags: int32, cb: (error<uv-file>) -> io-noexn (), mode: int32 = 0.int32): io-noexn ()
-  if mode == 0.int32 && (flags == o_TMPFILE || flags == o_CREAT) then
-    cb(Error(Exception("Cannot open with no permission flags when creating " ++ path, ExnAssert)))
-  open(path, flags, mode, cb)
+pub extern read(^file: uv-file, ^buf: bytes, offset: ssize_t, cb: (error<ssize_t>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_read"
 
+pub extern write(^file: uv-file, buf: bytes, offset: int64, cb: (error<ssize_t>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_write"
+
+pub extern mkstemp(template: string, cb: (error<(uv-file, string)>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_mkstemp"
+
+pub extern fsync(^file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_fsync"

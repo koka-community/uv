@@ -20,12 +20,6 @@
 // This macro also defines typed conversions for:
 // - getting a pointer to the kk wrapper given a raw uv pointer (_as_kk)
 // - getting a pointer from a boxed version (_unbox_borrowed)
-//
-// handle structs have a reference to themselves in the `box` field, which is responsible for eventual deallocation
-// request structs have the same layout, however `box` (if set) does not refer to the request,
-// the request is single-use and not reference counted
-// TODO: do we really need box? We could probably take it out of request types, but then we couldn't
-// have the same function work on handles/requests. Maybe that's fine though?
 #define declare_uv_handle_base(uv_type) \
   typedef struct kk_##uv_type##_s { \
     kk_function_t callback; \
@@ -54,28 +48,8 @@ static inline char has_callback(kk_uv_any_t* handle, kk_context_t* _ctx) {
   return !kk_function_is_null(handle->callback, _ctx);
 }
 
-// A request is similar to a handle, but don't have a `box` self-reference.
-// Requests don't participate in reference counting, they are freed when the operation
-// completes or is canceled.
-#define declare_uv_req_base(uv_type) \
-  typedef struct kk_##uv_type##_s { \
-    kk_function_t callback; \
-    uv_type##_t uv; \
-  } kk_##uv_type##_t; \
-  __attribute__((unused)) \
-  static kk_##uv_type##_t* uv_type##_as_kk(uv_type##_t* p) { \
-    return (kk_##uv_type##_t *) (((char*)p) - offsetof(kk_##uv_type##_t, uv)); \
-  } \
-  __attribute__((unused)) \
-  static kk_uv_any_t* kk_##uv_type##_as_any(kk_##uv_type##_t* p) { \
-    return (kk_uv_any_t*) p; \
-  }
-
 // kk_uv_handle_t
 declare_uv_handle_base(uv_handle);
-
-// kk_uv_req_t
-declare_uv_req_base(uv_req);
 
 // Builds on declare_uv_struct_base with additional utilities:
 // - casting a kk_uv_<type> to a generic kk_uv_handle_t (_as_handle)
@@ -92,22 +66,34 @@ declare_uv_req_base(uv_req);
     return kk_##uv_type##_as_handle(uv_type##_as_kk(p)); \
   } \
   __attribute__((unused)) \
+  static kk_uv_any_t* uv_type##_as_kk_any(uv_type##_t* p) { \
+    return kk_##uv_type##_as_any(uv_type##_as_kk(p)); \
+  } \
+  __attribute__((unused)) \
   static kk_box_t kk_##uv_type##_box(kk_##uv_type##_t* p, kk_context_t* _ctx) { \
     return kk_cptr_raw_box(&kk_uv_handle_free_fn, (void*)p, _ctx); \
   }
 
-// Builds on declare_uv_struct_base with additional utilities:
-// - casting a kk_uv_<type> to a generic kk_uv_req_t (_as_req)
-// - casting a raw UV pointer to a generic kk_uv_req_t (_as_kk_req)
+// A request is similar to a handle, but the `uv` struct isn't a uv_handle_t.
+// There is no `_as_req` function, only `_as_any`.
+// Requests don't participate in reference counting, they are freed when the operation
+// completes or is canceled.
 #define declare_uv_req(uv_type) \
-  declare_uv_req_base(uv_type); \
+  typedef struct kk_##uv_type##_s { \
+    kk_function_t callback; \
+    uv_type##_t uv; \
+  } kk_##uv_type##_t; \
   __attribute__((unused)) \
-  static kk_uv_req_t* kk_##uv_type##_as_req(kk_##uv_type##_t* p) { \
-    return (kk_uv_req_t*)p; \
+  static kk_##uv_type##_t* uv_type##_as_kk(uv_type##_t* p) { \
+    return (kk_##uv_type##_t *) (((char*)p) - offsetof(kk_##uv_type##_t, uv)); \
   } \
   __attribute__((unused)) \
-  static kk_uv_req_t* uv_type##_as_kk_req(uv_type##_t* p) { \
-    return kk_##uv_type##_as_req(uv_type##_as_kk(p)); \
+  static kk_uv_any_t* kk_##uv_type##_as_any(kk_##uv_type##_t* p) { \
+    return (kk_uv_any_t*) p; \
+  } \
+  __attribute__((unused)) \
+  static kk_uv_any_t* uv_type##_as_kk_any(uv_type##_t* p) { \
+    return kk_##uv_type##_as_any(uv_type##_as_kk(p)); \
   }
 
 // ------------------------------
@@ -132,29 +118,9 @@ declare_uv_req_base(uv_req);
   hnd->callback = kk_function_null(_ctx);
 
 // Requests require no initialization on the uv side.
-#define malloc_req(uv_type, hnd, cb, ...) \
+#define malloc_req(uv_type, hnd, cb) \
   kk_##uv_type##_t* hnd = kk_malloc(sizeof(kk_##uv_type##_t), _ctx); \
   hnd->callback = cb;
-
-// ------------------------------
-// Starting operations
-// ------------------------------
-
-// Initiate a UV operation which will invoke a callback.
-// On error the callback is taken out of the handle and the
-// handle is dropped, `on_error` should invoke `callback`.
-#define kk_uv_setup_callback(uv_t, hnd, status, cb, call_uv_expr, on_error, drops) \
-  status = call_uv_expr; \
-  if (status != UV_OK) { \
-    kk_uv_handle_t* raw_hnd = kk_##uv_t##_as_req(hnd); \
-    cb = kk_uv_any_take_callback(kk_uv_req_as_any(raw_hnd)); \
-    do drops while(0); \
-    kk_uv_req_drop(raw_hnd, _ctx); \
-    do on_error while(0); \
-    return; \
-  } else { \
-    do drops while(0); \
-  }
 
 // ------------------------------
 // Handle mutation
@@ -169,7 +135,6 @@ static kk_function_t kk_uv_any_take_callback(kk_uv_any_t* hnd, kk_context_t* _ct
   return cb;
 }
 #define kk_uv_handle_take_callback(hnd, _ctx) kk_uv_any_take_callback(kk_uv_handle_as_any(hnd), _ctx)
-#define kk_uv_req_take_callback(hnd, _ctx) kk_uv_any_take_callback(kk_uv_req_as_any(hnd), _ctx)
 
 // Return a copy of the handle's callback
 __attribute__((unused))
@@ -178,7 +143,6 @@ static kk_function_t kk_uv_any_dup_callback(kk_uv_any_t* hnd, kk_context_t* _ctx
   return kk_function_dup(hnd->callback, _ctx);
 }
 #define kk_uv_handle_dup_callback(hnd, _ctx) kk_uv_any_dup_callback(kk_uv_handle_as_any(hnd), _ctx)
-#define kk_uv_req_dup_callback(hnd, _ctx) kk_uv_any_dup_callback(kk_uv_req_as_any(hnd), _ctx)
 
 // Set the handle's callback. Aborts if handle is already set
 __attribute__((unused))
@@ -188,7 +152,6 @@ static void kk_uv_any_set_callback(kk_uv_any_t* hnd, kk_function_t callback, kk_
 }
 
 #define kk_uv_handle_set_callback(hnd, cb, _ctx) kk_uv_any_set_callback(kk_uv_handle_as_any(hnd), cb, _ctx)
-#define kk_uv_req_set_callback(hnd, cb, _ctx) kk_uv_any_set_callback(kk_uv_req_as_any(hnd), cb, _ctx)
 
 // Set the handle's callback. Returns EBUSY if already set.
 __attribute__((unused))
@@ -202,7 +165,6 @@ static int kk_uv_any_try_set_callback(kk_uv_any_t* hnd, kk_function_t callback, 
 }
 
 #define kk_uv_handle_try_set_callback(hnd, cb, _ctx) kk_uv_any_try_set_callback(kk_uv_handle_as_any(hnd), cb, _ctx)
-#define kk_uv_req_try_set_callback(hnd, cb, _ctx) kk_uv_any_try_set_callback(kk_uv_req_as_any(hnd), cb, _ctx)
 
 // ------------------------------
 // Error / exception helpers
@@ -222,9 +184,8 @@ static kk_std_core_exn__error kk_status_error(int status, kk_context_t* _ctx) {
 }
 
 // return `Ok(ok_expr)` if the status is UV_OK, otherwise Error(...)
-__attribute__((unused))
 #define kk_status_error_or(status, ok_expr, _ctx) \
-  ((status == UV_OK) ? kk_std_core_exn__new_Ok(ok_expr, _ctx) : kk_status_error(status, _ctx))
+  ((status >= 0) ? kk_std_core_exn__new_Ok(ok_expr, _ctx) : kk_status_error(status, _ctx))
 
 
 // ------------------------------
@@ -260,24 +221,29 @@ static void kk_uv_error_callback(kk_function_t callback, kk_std_core_exn__error 
 // Drop the contents of a uv handle. Freeing won't actually occur
 // until the last reference is dropped and the free_fn is invoked.
 __attribute__((unused))
-static void kk_uv_handle_drop_references(kk_uv_handle_t *hnd, kk_context_t *_ctx) {
-  if (has_callback(kk_uv_handle_as_any(hnd), _ctx)) {
+static void kk_uv_any_drop_references(kk_uv_any_t *hnd, kk_context_t *_ctx) {
+  if (has_callback(hnd, _ctx)) {
     kk_function_drop(hnd->callback, _ctx);
     hnd->callback = kk_function_null(_ctx);
   }
 }
 
-// TODO is this valid? Or do we need a req-only version?
-__attribute__((unused))
-static void kk_uv_req_drop_references(kk_uv_req_t *hnd, kk_context_t *_ctx) {
-  kk_uv_handle_drop_references((kk_uv_handle_t*)hnd, _ctx);
-}
+#define kk_uv_handle_drop_references(hnd, _ctx) kk_uv_any_drop_references(kk_uv_handle_as_any(hnd), _ctx)
 
 // free a request type (immediately)
 __attribute__((unused))
-static void kk_uv_req_drop(kk_uv_req_t *hnd, kk_context_t *_ctx) {
-  kk_uv_req_drop_references(hnd, _ctx);
+static void kk_uv_req_free(kk_uv_any_t *hnd, kk_context_t *_ctx) {
+  kk_uv_any_drop_references(hnd, _ctx);
   kk_free(hnd, _ctx);
+}
+
+// free a request type (immediately),
+// after taking (and then returning) its callback
+__attribute__((unused))
+static kk_function_t kk_uv_req_take_callback_and_free(kk_uv_any_t *hnd, kk_context_t *_ctx) {
+  kk_function_t callback = kk_uv_any_take_callback(hnd, _ctx);
+  kk_uv_req_free(hnd, _ctx);
+  return callback;
 }
 
 // Callback invoked by uv once a handle is closed.

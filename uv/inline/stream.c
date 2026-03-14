@@ -100,8 +100,9 @@ static void* stream_g;
 
 static void kk_uv_write_callback(uv_write_t* write, int status){
   kk_context_t* _ctx = kk_get_context();
-  kk_uv_req_t* kk_hnd = uv_write_as_kk_req(write);
-  kk_function_t callback = kk_uv_req_take_callback(kk_hnd, _ctx);
+  kk_uv_write_t* kk_uv_write = uv_write_as_kk(write);
+  kk_uv_any_t* kk_any = kk_uv_write_as_any(kk_uv_write);
+  kk_function_t callback = kk_uv_any_take_callback(kk_any, _ctx);
 
   // free the input data and the request
   kk_uv_bufs_t* bufs = (kk_uv_bufs_t*)write->data;
@@ -113,7 +114,7 @@ static void kk_uv_write_callback(uv_write_t* write, int status){
   //   kk_block_refcount(stream_g)
   // );
 
-  kk_uv_req_drop(kk_hnd, _ctx);
+  kk_uv_req_free(kk_any, _ctx);
 
   kk_status_code_callback(callback, status, _ctx);
 }
@@ -121,7 +122,7 @@ static void kk_uv_write_callback(uv_write_t* write, int status){
 // Stores `kk_uv_bufs*` in write->data, freed by `kk_uv_write_callback`
 static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vector bufs, kk_function_t cb, kk_context_t* _ctx){
   malloc_req(uv_write, write, cb);
-  kk_uv_req_t* uv_hnd = kk_uv_write_as_req(write);
+  kk_uv_any_t* uv_hnd = kk_uv_write_as_any(write);
 
   kk_ssize_t num_bufs;
   kk_uv_bufs_t* kk_uv_bufs = kk_bytes_vec_to_uv_bufs(bufs, &num_bufs, _ctx);
@@ -138,7 +139,7 @@ static void kk_uv_write(kk_uv_stream__uv_stream stream, kk_std_core_types__vecto
   // kk_warning_message("uv_write returned %d\n", status);
   if (status != UV_OK) {
     kk_uv_bufs_drop(kk_uv_bufs, _ctx);
-    cb = kk_uv_req_take_callback(kk_uv_write_as_req(write), _ctx);
+    cb = kk_uv_any_take_callback(kk_uv_write_as_any(write), _ctx);
     kk_free(write, _ctx);
     kk_status_code_callback(cb, status, _ctx);
   }
@@ -176,9 +177,9 @@ static kk_uv_status_code_t kk_uv_accept(kk_uv_stream__uv_stream server, kk_uv_st
 static void kk_uv_shutdown_callback(uv_shutdown_t* uv_shutdown, int status){
   kk_context_t* _ctx = kk_get_context();
   kk_uv_shutdown_t* kk_shutdown = uv_shutdown_as_kk(uv_shutdown);
-  kk_uv_req_t* kk_req = kk_uv_shutdown_as_req(kk_shutdown);
-  kk_function_t callback = kk_uv_req_take_callback(kk_req, _ctx);
-  kk_uv_req_drop(kk_req, _ctx);
+  kk_uv_any_t* kk_req = kk_uv_shutdown_as_any(kk_shutdown);
+  kk_function_t callback = kk_uv_any_take_callback(kk_req, _ctx);
+  kk_uv_req_free(kk_req, _ctx);
   kk_status_code_callback(callback, status, _ctx);
 }
 

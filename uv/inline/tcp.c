@@ -109,7 +109,7 @@ static void kk_uv_tcp_connect_c(kk_uv_tcp__tcp tcp, kk_uv_tcp__sock_addr addr, k
   if (status != UV_OK) {
     kk_uv_req_t* req = kk_uv_connect_as_req(connect);
     callback = kk_uv_req_take_callback(req, _ctx);
-    kk_uv_req_drop(req, _ctx);
+    kk_uv_req_free(req, _ctx);
     kk_status_code_callback(callback, status, _ctx);
   }
 }

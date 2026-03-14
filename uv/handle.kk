@@ -11,7 +11,7 @@ extern import
 // Drops the handle's internal reference, triggering
 // closure of the underlying resource. Returns UV_EBUSY
 // if there are still other references to the handle.
-pub extern close-handle(hnd: uv-handle): io-noexn uv-status-code
+extern close-handle(hnd: uv-handle): io-noexn uv-status-code
   c "kk_uv_handle_close_impl"
 
 // Close any resource with a `uv-handle` accessor
