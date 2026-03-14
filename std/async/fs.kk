@@ -1,23 +1,23 @@
-module std/async/async-file
+module std/async/fs
 
-import uv/file
+import uv/fs
 import std/os/env
 import std/os/path
 import std/async/async
 import std/num/int32
 
-abstract value struct file-read<s::S> { internal: uv-file }
+abstract value struct file-read<s::S> { internal: file }
 pub fun read/readable(f: file-read<s>): file-read<s> -> f
 
-abstract value struct file-write<s::S> { internal: uv-file }
+abstract value struct file-write<s::S> { internal: file }
 pub fun write/writable(f: file-write<s>): file-write<s> -> f
 
-abstract value struct file-rw<s::S> { internal: uv-file }
+abstract value struct file-rw<s::S> { internal: file }
 pub fun rw/readable(f: file-rw<s>): file-read<s> -> File-read(f.internal)
 pub fun rw/writable(f: file-rw<s>): file-write<s> -> File-write(f.internal)
 
 abstract value struct tempfile<s::S>
-  internal: uv-file
+  internal: file
   path: string
 
 pub fun path(f: tempfile<_>): string -> f.tempfile/path
@@ -34,10 +34,10 @@ fun nonrepeatable(action: () -> e a): e a
     debug/assert("nonrepeatable action resumed more than once", i == 0)
   action()
 
-fun open-raw(path: string, flags: int32, action: uv-file -> <async,io|e> a): <async,io|e> a
+fun open-raw(path: string, flags: int32, action: file -> <async,io|e> a): <async,io|e> a
   val mode = int32/zero
-  val f = await1(fn(cb) -> uv/file/open(path, flags, mode, cb)).untry
-  with finally { uv/file/close(f).untry }
+  val f = await1(fn(cb) -> uv/fs/open(path, flags, mode, cb)).untry
+  with finally { uv/fs/close(f).untry }
   nonrepeatable { action(f) }
 
 pub fun open-read(path: string, action: forall<s> (file-read<s>) -> <async,io|e> a): <async,io|e> a
@@ -48,7 +48,7 @@ pub fun read<f>(file: f, ?readable: (f) -> file-read<s>): <async,io> bytes
   var result: bytes := empty()
   val buf: bytes = alloc(1024.ssize_t)
   while {
-    val nread: ssize_t = await1(fn(cb) -> uv/file/read(r.internal, buf, offset = current-offset, cb = cb)).untry
+    val nread: ssize_t = await1(fn(cb) -> uv/fs/read(r.internal, buf, offset = current-offset, cb = cb)).untry
     if nread.int == 0 then
       False
     else
@@ -86,7 +86,7 @@ pub fun tempfile(action: forall<s> (tempfile<s>) -> <async,io|e> a, name: string
     Nothing -> tempdir()
   val template = base / (name ++ "XXXXXX")
   val (f, path) = await1(fn(cb) -> mkstemp(template.string, cb)).untry
-  with finally { uv/file/close(f).untry }
+  with finally { uv/fs/close(f).untry }
   nonrepeatable { action(Tempfile(f, path)) }
 
 pub fun open-rw(path: string, action: forall<s> (file-rw<s>) -> <async,io|e> a,
@@ -103,4 +103,4 @@ pub fun write<f>(file: f, bytes: bytes, ?writable: (f) -> file-write<s>): <async
 
 pub fun fsync<f>(file: f, ?writable: (f) -> file-write<s>): <async,io> ()
   val w = writable(file)
-  await1(fn(cb) -> uv/file/fsync(w.internal, cb)).untry
+  await1(fn(cb) -> uv/fs/fsync(w.internal, cb)).untry

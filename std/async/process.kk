@@ -105,7 +105,7 @@ pub fun exit/(==)(a: exit, b: exit): div bool
     (Exit-signal(a), Exit-signal(b)) -> a == b
     _ -> False
 
-fun stdio-stream-of-output(output: child-output-stream, inherit-fd): asyncx (stdio-stream, maybe<io-stream>)
+fun stdio-stream-of-output(output: child-output-stream, inherit-fd): <io,async> (stdio-stream, maybe<io-stream>)
   match output
     // Output-to(stream) -> (Stream-)
     Ignore-output -> (Stream-ignore, Nothing)
@@ -124,7 +124,7 @@ pub val kill-strategy/default = Signal-escalate(20.seconds)
 // TODO: move into async?
 // Without cancelation, this likely causes a memory leak
 // because it is never resolved.
-fun never(): asyncx a
+fun never(): <io,async> a
   await0 fn(cb) ()
   impossible("impossible: never() resumed")
 

@@ -1,6 +1,6 @@
 import std/test
 import std/async/async
-import std/async/async-file
+import std/async/fs
 import uv/event-loop
 import std/core/bytes
 import std/core/int

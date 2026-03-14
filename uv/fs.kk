@@ -7,7 +7,7 @@
 ---------------------------------------------------------------------------*/
 
 // Provides low level file operations using libuv callbacks
-module uv/file
+module uv/fs
 
 import uv/handle
 pub import std/core/bytes
@@ -16,7 +16,7 @@ pub import std/num/int64
 pub import uv/utils
 
 extern import
-  c file "inline/file.c"
+  c file "inline/fs.c"
 
 // A Koka representation of the timespec struct
 pub value struct timespec
@@ -69,7 +69,7 @@ pub fun statfs/show(f: statfs): string
 // Directory entry types
 pub type dirent-type
   UNKNOWN_DIRECTORY_ENTRY
-  FILE
+  DIRENT_FILE // TODO rename FILE, koka gets confused by FILE builtin function?
   DIR
   LINK
   FIFO
@@ -180,7 +180,7 @@ extern oTMPFILE(): int32
 // pub value struct uv-fs-req { internal : any };
 
 // A uv file type
-pub value struct uv-file { internal : any };
+pub value struct file { internal : any };
 
 // A uv directory type
 // pub value struct uv-dir { internal : intptr_t };
@@ -188,22 +188,22 @@ pub value struct uv-file { internal : any };
 // Drops the handle's internal reference, triggering
 // closure of the underlying resource. Returns UV_EBUSY
 // if there are still other references to the handle.
-pub extern close(file: uv-file): io-noexn uv-status-code
+pub extern close(file: file): io-noexn uv-status-code
   c "kk_uv_file_close_impl"
 
 // Equivalent to open(2).
 // WARNING: On Windows libuv uses CreateFileW and thus the file is always opened in binary mode. Because of this the O_BINARY and O_TEXT flags are not supported.
-pub extern open(path: string, flags: int32, mode: int32, cb: (error<uv-file>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_open"
+pub extern open(path: string, flags: int32, mode: int32, cb: (error<file>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_open_impl"
 
-pub extern read(^file: uv-file, ^buf: bytes, offset: ssize_t, cb: (error<ssize_t>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_read"
+pub extern read(^file: file, ^buf: bytes, offset: ssize_t, cb: (error<ssize_t>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_read_impl"
 
-pub extern write(^file: uv-file, buf: bytes, offset: int64, cb: (error<ssize_t>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_write"
+pub extern write(^file: file, buf: bytes, offset: int64, cb: (error<ssize_t>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_write_impl"
 
-pub extern mkstemp(template: string, cb: (error<(uv-file, string)>) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_mkstemp"
+pub extern mkstemp(template: string, cb: (error<(file, string)>) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_mkstemp_impl"
 
-pub extern fsync(^file: uv-file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
-  c "kk_uv_fs_fsync"
+pub extern fsync(^file: file, cb: (uv-status-code) -> io-noexn ()): io-noexn ()
+  c "kk_uv_fs_fsync_impl"

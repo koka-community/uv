@@ -23,7 +23,7 @@ fun main()
   with async/handle
   run-tests(suite)
 
-fun suite()
+fun suite() // : <io,async,test<<io,async>>> ()
   effectful-test("reading & writing a pipe")
     expect("hello")
       val (r, w) = mkpipe().untry

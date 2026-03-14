@@ -22,5 +22,5 @@ pub fun read-all(^stream): <io,async> bytes
   .untry
 
 
-pub fun write(^stream: io-stream, data: string): <asyncx> ()
+pub fun write(^stream: io-stream, data: string): <async,io> ()
   await1(fn(cb) stream.stream/write([data.bytes].vector, cb)).untry

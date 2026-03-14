@@ -107,9 +107,8 @@ static void kk_uv_tcp_connect_c(kk_uv_tcp__tcp tcp, kk_uv_tcp__sock_addr addr, k
   malloc_req(uv_connect, connect, callback);
   status = uv_tcp_connect(&connect->uv, &kk_tcp->uv, (struct sockaddr*)&sockaddr, kk_uv_tcp_connect_callback);
   if (status != UV_OK) {
-    kk_uv_req_t* req = kk_uv_connect_as_req(connect);
-    callback = kk_uv_req_take_callback(req, _ctx);
-    kk_uv_req_free(req, _ctx);
+    kk_uv_any_t* req = kk_uv_connect_as_any(connect);
+    callback = kk_uv_req_take_callback_and_free(req, _ctx);
     kk_uv_status_code_callback(callback, status, _ctx);
   }
 }
