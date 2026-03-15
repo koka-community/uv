@@ -149,3 +149,8 @@ static kk_std_core_exn__error kk_uv_proc_signal(kk_uv_process__uv_process proces
   int status = uv_process_kill(&kk_process->uv, kk_signal);
   return kk_uv_error_or(status, kk_unit_box(kk_Unit), _ctx);
 }
+
+static kk_std_core_exn__error kk_uv_pid_signal(int32_t pid, int32_t kk_signal, kk_context_t* _ctx) {
+  int status = uv_kill(pid, kk_signal);
+  return kk_uv_error_or(status, kk_unit_box(kk_Unit), _ctx);
+}

@@ -61,8 +61,8 @@ extern spawn-c(
 pub extern pid(^process: uv-process): int32
   c "kk_uv_proc_pid"
 
-pub fun signal(^process: uv-process, signal: int32): exn ()
-  process.try-signal(signal).untry
-
-extern try-signal(^process: uv-process, signal: int32): error<()>
+pub extern signal(^process: uv-process, signal: int32): error<()>
   c "kk_uv_proc_signal"
+
+pub extern pid/signal(pid: int32, signal: int32): error<()>
+  c "kk_uv_pid_signal"

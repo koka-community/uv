@@ -74,7 +74,7 @@ fun update/ignore-stderr(o: child-output): child-output
 
 abstract struct output-streams(stdout: maybe<io-stream>, stderr: maybe<io-stream>)
 
-abstract struct process
+abstract struct process<s::S>
   internal: uv-process
   exit-p: promise<exit>
   output-streams: output-streams
@@ -128,7 +128,7 @@ fun never(): <io,async> a
   await0 fn(cb) ()
   impossible("impossible: never() resumed")
 
-fun do-kill(process: process, strategy: kill-strategy): <io,async> ()
+fun do-kill(process: process<_>, strategy: kill-strategy): <io,async> ()
   match strategy
     Signal-once -> process.signal(sig-int)
     Signal-repeat(signum, wait-time) ->
@@ -142,7 +142,7 @@ fun do-kill(process: process, strategy: kill-strategy): <io,async> ()
         duration/wait(wait-time)
 
 // kill a process and wait for it to end
-pub fun kill(process: process, strategy: kill-strategy = default): <io,async> exit
+pub fun kill(process: process<_>, strategy: kill-strategy = default): <io,async> exit
   fun perform()
     do-kill(process, strategy)
     never()
@@ -150,10 +150,10 @@ pub fun kill(process: process, strategy: kill-strategy = default): <io,async> ex
 
 // send a signal to a process and immeditately return.
 // See `kill` for a variant which waits for the process to exit
-pub fun signal(process: process, sig: int32): <io,async> ()
-  uv/process/signal(process.internal, sig)
+pub fun signal(process: process<_>, sig: int32): <io,async> ()
+  uv/process/signal(process.internal, sig).untry
 
-fun finalize-process(p: process, strategy: kill-strategy): <io,async> ()
+fun finalize-process(p: process<_>, strategy: kill-strategy): <io,async> ()
   match p.exit-p.try-await
     Just(_) -> ()
     Nothing ->
@@ -182,7 +182,7 @@ fun foreach(m: maybe<a>, action: a -> e ()): e ()
 
 pub fun run(
   command: command,
-  action: (process) -> <io,async|e> a,
+  action: forall<s> (process<s>) -> <io,async|e> a,
   // optional args
   check-exit: bool = True,
   kill-strategy: kill-strategy = default
@@ -242,10 +242,10 @@ fun close-owned(stream: stdio-stream): <io,async> ()
     Stream-uv(s) -> s.close().untry
     _ -> ()
 
-pub fun await(process: process): <io,async> exit
+pub fun await(process: process<_>): <io,async> exit
   process.exit-p.await
 
-pub fun pid(process: process): <io-noexn> int
+pub fun pid(process: process<_>): <io-noexn> int
   process.internal.uv/process/pid.int
 
 fun require(v: maybe<io-stream>, desc: string): exn io-stream
@@ -253,29 +253,29 @@ fun require(v: maybe<io-stream>, desc: string): exn io-stream
     Just(v) -> v
     Nothing -> throw("Process has no " ++ desc ++ " stream")
 
-pub fun output-stream(process: process): exn io-stream
+pub fun output-stream(process: process<_>): exn io-stream
   process.output-streams.stdout.require("stdout")
 
-pub fun stderr-stream(process: process): exn io-stream
+pub fun stderr-stream(process: process<_>): exn io-stream
   process.output-streams.stderr.require("stderr")
 
-pub fun output-bytes(process: process): <io,async> bytes
+pub fun output-bytes(process: process<_>): <io,async> bytes
   process.output-stream.read-all()
 
-pub fun output(process: process): <io,async> string
+pub fun output(process: process<_>): <io,async> string
   process.output-bytes.string
 
-pub fun stderr-output-bytes(process: process): <io,async> bytes
+pub fun stderr-output-bytes(process: process<_>): <io,async> bytes
   process.stderr-stream.read-all()
 
-pub fun stderr-output(process: process): <io,async> string
+pub fun stderr-output(process: process<_>): <io,async> string
   process.stderr-output-bytes.string
 
-pub fun outputs-bytes(process: process): <io,async> (bytes, bytes)
+pub fun outputs-bytes(process: process<_>): <io,async> (bytes, bytes)
   val out = process.output-stream()
   val err = process.stderr-stream()
   interleaved({ out.read-all() }, { err.read-all() })
 
-pub fun outputs(process: process): <io,async> (string, string)
+pub fun outputs(process: process<_>): <io,async> (string, string)
   val (out, err) = process.outputs-bytes
   (out.string, err.string)

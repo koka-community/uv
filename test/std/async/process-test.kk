@@ -5,6 +5,7 @@ import std/stream
 import std/test
 import std/async/async
 import uv/pipe
+import uv/process
 
 fun main()
   with default-event-loop
@@ -19,8 +20,8 @@ fun error-message(action: () -> <exn|e> a): e maybe<string>
 fun expect-error-message(message, action)
   expect(Just(message)) { error-message(action) }
 
-fun expect-process-finished(process)
-  expect-error-message("no such process") { process.signal(0.int32) }
+fun expect-process-finished(pid: int)
+  expect-error-message("no such process") { pid/signal(pid.int32, 0.int32).untry }
 
 fun suite()
   effectful-test("success")
@@ -37,7 +38,7 @@ fun suite()
         p.await()
 
   effectful-test("`run` does not return until the process ends")
-    val p = command("sleep", ["0.3"]).run(fn(p) p)
+    val p = command("sleep", ["0.3"]).run(fn(p) p.pid)
     expect-process-finished(p)
 
   effectful-test("`run` kills the process when the block throws")
@@ -45,7 +46,7 @@ fun suite()
     val errmsg = "error in block"
     expect-error-message(errmsg)
       command("sleep", ["100"]).run fn(p)
-        process := Just(p)
+        process := Just(p.pid)
         throw(errmsg)
     expect-process-finished(process.unjust)
 
