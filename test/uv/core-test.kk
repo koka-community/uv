@@ -2,13 +2,14 @@ import std/test
 import std/async/async
 import uv/timer
 import std/os/process
+import uv/event-loop
 
 fun expect-contains(s: string, f: () -> io string)
   val result = f()
   expect(True, details = result ++ " contains " ++ s) { result.contains(s) }
 
 fun main(): io-noexn ()
-  with handle-loop
+  with default-event-loop
   with async/handle
   run-tests(suite)
 

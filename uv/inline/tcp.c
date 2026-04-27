@@ -51,7 +51,7 @@ static kk_std_core_exn__error kk_uv_tcp_init(kk_context_t* _ctx) {
     kk_free(tcp, _ctx);
     return kk_uv_error(status, _ctx);
   } else {
-    return kk_std_core_exn__new_Ok(
+    return kk_std_core_types__new_Ok(
       kk_uv_tcp__tcp_box(
         kk_uv_tcp__new_Tcp(
           kk_uv_tcp_box(tcp, _ctx),

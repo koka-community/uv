@@ -176,7 +176,7 @@ static void kk_std_os_fs_mkstemp_cb(uv_fs_t* req) {
 
     kk_uv_error_callback(
       cb,
-      kk_std_core_exn__new_Ok(
+      kk_std_core_types__new_Ok(
         kk_std_core_types__tuple2_box(
           kk_std_core_types__new_Tuple2(
             kk_uv_fs__file_box(kk_uv_fs__new_File(kk_file, _ctx), _ctx),

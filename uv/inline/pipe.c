@@ -51,5 +51,5 @@ static kk_std_core_exn__error kk_uv_pipe(kk_context_t* _ctx) {
     kk_uv_stream__uv_stream_box(kk_uv_stream__new_Uv_stream(kk_uv_pipe_box(writable, _ctx), _ctx), _ctx),
     _ctx);
 
-  return kk_std_core_exn__new_Ok(kk_std_core_types__tuple2_box(result, _ctx), _ctx);
+  return kk_std_core_types__new_Ok(kk_std_core_types__tuple2_box(result, _ctx), _ctx);
 }

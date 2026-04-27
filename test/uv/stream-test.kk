@@ -9,11 +9,6 @@ import std/time/duration
 import uv/timer // settimeout
 import uv/tcp
 
-fun error/show(e: error<t>, ?t/show: t -> string): string
-  match e
-    Ok(t) -> "Ok(" ++ t/show(t) ++ ")"
-    Error(e) -> "Error(" ++ show(e) ++ ")"
-
 fun tapprint(t: t, desc: string, ?show: t -> string): <expect> t
   hint(desc ++ ": " ++ show(t))
   t

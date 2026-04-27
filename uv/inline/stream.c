@@ -38,7 +38,7 @@ static void kk_uv_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf
   if (nread < 0) {
     callback = kk_uv_handle_take_callback(kk_hnd, _ctx); // read_cb won't be called again after an error
     if (nread == UV_EOF) {
-      result = kk_std_core_exn__new_Ok(
+      result = kk_std_core_types__new_Ok(
         kk_std_core_types__maybe_box(
           kk_std_core_types__new_Nothing(_ctx),
           _ctx),
@@ -52,7 +52,7 @@ static void kk_uv_read_callback(uv_stream_t* stream, ssize_t nread, const uv_buf
 
     // shrink bytes if necessary, and return via callback
     bytes = kk_bytes_adjust_length(bytes, (kk_ssize_t)nread, _ctx);
-    result = kk_std_core_exn__new_Ok(
+    result = kk_std_core_types__new_Ok(
       kk_std_core_types__maybe_box(
         kk_std_core_types__new_Just(
           kk_bytes_box(bytes),

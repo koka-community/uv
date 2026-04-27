@@ -175,17 +175,19 @@ __attribute__((unused))
 static kk_std_core_exn__error kk_uv_error(int status, kk_context_t* _ctx) {
   kk_uv_status_code_t code = kk_uv_status_code(status, _ctx);
   kk_string_t msg = kk_uv_utils_message(code, _ctx);
-  return kk_std_core_exn__new_Error(
-    kk_std_core_exn__new_Exception(
-      msg,
-      kk_uv_utils__new_AsyncExn(kk_reuse_null, 0, code, _ctx),
+  return kk_std_core_types__new_Error(
+    kk_std_core_exn__exception_box(
+      kk_std_core_exn__new_Exception(
+        msg,
+        kk_uv_utils__new_AsyncExn(kk_reuse_null, 0, code, _ctx),
+        _ctx),
       _ctx),
     _ctx);
 }
 
 // return `Ok(ok_expr)` if the status is UV_OK, otherwise Error(...)
 #define kk_uv_error_or(status, ok_expr, _ctx) \
-  ((status >= 0) ? kk_std_core_exn__new_Ok(ok_expr, _ctx) : kk_uv_error(status, _ctx))
+  ((status >= 0) ? kk_std_core_types__new_Ok(ok_expr, _ctx) : kk_uv_error(status, _ctx))
 
 
 // ------------------------------

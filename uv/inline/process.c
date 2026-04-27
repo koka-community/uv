@@ -130,7 +130,7 @@ static kk_std_core_exn__error kk_uv_proc_spawn_c(
     // A running process owns its own handle until it's exited.
     // so that if the user drops the handle before execution is complete, the handle won't be
     // freed before the process ends.
-    return kk_std_core_exn__new_Ok(
+    return kk_std_core_types__new_Ok(
       kk_uv_process__uv_process_box(
         kk_uv_process__new_Uv_process(kk_uv_process_box(kk_process, _ctx), _ctx),
         _ctx),
