@@ -10,6 +10,8 @@
 module uv/process
 
 import uv/utils
+import uv/stream
+import uv/event-loop
 import std/num/int32
 import std/num/int64
 
@@ -26,8 +28,8 @@ pub struct uv-command
 
 pub type stdio-stream
   Stream-ignore
-  // stream-mkpipe // TODO
   Stream-fd(fd: int32)
+  Stream-uv(value: uv-stream)
 
 // pub fun pipe-stdout(pipe): child-output
 //   Split(Output-to(pipe), Inerhit-output-stream)
@@ -36,13 +38,19 @@ pub type stdio-stream
 // https://docs.libuv.org/en/v1.x/process.html
 pub value struct uv-process { internal: any }
 
+pub fun uv-handle(process: uv-process): uv-handle
+  Uv-handle(process.internal)
+
 pub alias uv-exit-cb = (status: int64, signal: int32) -> io-noexn ()
 
-pub fun spawn(command: uv-command, on-complete: uv-exit-cb): io uv-process
+// Spawn a process. The resulting value MUST be retained until after
+// the process completes.
+// Note that on-complete will not be invoked if the process can't be spawned
+pub fun spawn(command: uv-command, on-complete: uv-exit-cb): io error<uv-process>
   // https://docs.libuv.org/en/v1.x/process.html
   // Command line arguments. args[0] should be the path to the program.
   val raw-cmd = command(args = Cons(command.file, command.args))
-  untry(spawn-c(raw-cmd, on-complete))
+  spawn-c(raw-cmd, on-complete)
 
 extern spawn-c(
   command: uv-command,
@@ -53,8 +61,8 @@ extern spawn-c(
 pub extern pid(^process: uv-process): int32
   c "kk_uv_proc_pid"
 
-pub fun signal(^process: uv-process, signal: int32): exn ()
-  process.try-signal(signal).untry
-
-extern try-signal(^process: uv-process, signal: int32): error<()>
+pub extern signal(^process: uv-process, signal: int32): error<()>
   c "kk_uv_proc_signal"
+
+pub extern pid/signal(pid: int32, signal: int32): error<()>
+  c "kk_uv_pid_signal"

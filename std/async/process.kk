@@ -3,7 +3,10 @@ module std/async/process
 // Note: importing std/async causes clash with set-timeout / clear-timeout
 import std/async/async
 import uv/process
+import uv/event-loop
+import uv/pipe
 import uv/signal
+import std/stream
 import std/num/int32
 import std/num/int64
 import std/time/duration
@@ -12,7 +15,7 @@ import std/time/duration
 // TODO: support passing in pipes, and using strings for input/output
 
 // A command specification, which can be used to spawn a process
-pub struct command
+abstract struct command
   exe: string
   args: list<string>
   input: child-input
@@ -28,29 +31,35 @@ pub fun command(
 pub fun command/show(command: command)
   "command("++command.exe.show++", "++command.args.show++")"
 
-pub type child-input
+type child-input
   Ignore-input
   Inherit-input
+  Stream-input(stream: uv-stream)
 
 pub val input/default = Inherit-input
 pub val input/inherit: child-input = Inherit-input
 pub val input/ignore: child-input = Ignore-input
 
+pub fun command/with-output(cmd: command, output: child-output) cmd(output = output)
+pub fun command/with-input(cmd: command, input: uv-stream) cmd(input = Stream-input(input))
+
 type child-output-stream
   Ignore-output
-  Inerhit-output
-  // Capture-output
-  // Output-to(pipe)
+  Inherit-output
+  Capture-output
+  // Output-to(stream: uv-stream)
 
 type child-output
   // Capture-merged
   // Merge-output-to(pipe)
   Split(stdout: child-output-stream, stderr: child-output-stream)
 
-pub val output/default: child-output = Split(Inerhit-output, Inerhit-output)
-pub val output/inherit: child-output = Split(Inerhit-output, Inerhit-output)
+pub val output/default: child-output = Split(Inherit-output, Inherit-output)
+pub val output/inherit: child-output = Split(Inherit-output, Inherit-output)
 pub val output/ignore: child-output = Split(Ignore-output, Ignore-output)
-// pub val const/capture-stdout: child-output = Split(Capture-output, Inerhit-output)
+// pub fun const/stdout-stream(stream): child-output { Split(Output-to(stream), Inherit-output) }
+pub val const/capture-stdout: child-output = Split(Capture-output, Inherit-output)
+pub val const/capture-outputs: child-output = Split(Capture-output, Capture-output)
 // pub val const/capture-merged: child-output = Capture-merged
 
 // fun update/capture-stdout(o: child-output): child-output
@@ -63,9 +72,12 @@ fun update/ignore-stderr(o: child-output): child-output
     // Capture-merged -> Split(Capture-output, Ignore-output)
     Split(stdout, _) -> Split(stdout, Ignore-output)
 
-abstract struct process
+abstract struct output-streams(stdout: maybe<io-stream>, stderr: maybe<io-stream>)
+
+abstract struct process<s::S>
   internal: uv-process
   exit-p: promise<exit>
+  output-streams: output-streams
 
 pub type exit
   Exit-code(code: int)
@@ -93,11 +105,14 @@ pub fun exit/(==)(a: exit, b: exit): div bool
     (Exit-signal(a), Exit-signal(b)) -> a == b
     _ -> False
 
-fun stdio-stream-of-output(output: child-output-stream, inherit-fd)
+fun stdio-stream-of-output(output: child-output-stream, inherit-fd): <io,async> (stdio-stream, maybe<io-stream>)
   match output
-    Ignore-output -> Stream-ignore
-    Inerhit-output -> Stream-fd(inherit-fd)
-    // Capture-output -> impossible("TODO")
+    // Output-to(stream) -> (Stream-)
+    Ignore-output -> (Stream-ignore, Nothing)
+    Inherit-output -> (Stream-fd(inherit-fd), Nothing)
+    Capture-output ->
+      val (readable, writable) = mkpipe().untry
+      (Stream-uv(writable), Just(readable))
 
 pub type kill-strategy
   Signal-once(signal: int32)
@@ -109,25 +124,25 @@ pub val kill-strategy/default = Signal-escalate(20.seconds)
 // TODO: move into async?
 // Without cancelation, this likely causes a memory leak
 // because it is never resolved.
-fun never(): asyncx a
+fun never(): <io,async> a
   await0 fn(cb) ()
   impossible("impossible: never() resumed")
 
-fun do-kill(process: process, strategy: kill-strategy): <io,async> ()
+fun do-kill(process: process<_>, strategy: kill-strategy): <io,async> ()
   match strategy
-    Signal-once -> process.signal(sSIGINT)
+    Signal-once -> process.signal(sig-int)
     Signal-repeat(signum, wait-time) ->
       while { True }
         process.signal(signum)
         // TODO: async/wait should work?
         duration/wait(wait-time)
     Signal-escalate(wait-time) ->
-      [sSIGINT, sSIGQUIT, sSIGKILL].foreach fn(signum)
+      [sig-int, sig-quit, sig-kill].foreach fn(signum)
         process.signal(signum)
         duration/wait(wait-time)
 
 // kill a process and wait for it to end
-pub fun kill(process: process, strategy: kill-strategy = default): <io,async> exit
+pub fun kill(process: process<_>, strategy: kill-strategy = default): <io,async> exit
   fun perform()
     do-kill(process, strategy)
     never()
@@ -135,30 +150,39 @@ pub fun kill(process: process, strategy: kill-strategy = default): <io,async> ex
 
 // send a signal to a process and immeditately return.
 // See `kill` for a variant which waits for the process to exit
-pub fun signal(process: process, sig: int32): <io,async> ()
-  uv/process/signal(process.internal, sig)
+pub fun signal(process: process<_>, sig: int32): <io,async> ()
+  uv/process/signal(process.internal, sig).untry
 
-fun finalize-process(p, strategy: kill-strategy)
+fun finalize-process(p: process<_>, strategy: kill-strategy): <io,async> ()
   match p.exit-p.try-await
     Just(_) -> ()
     Nothing ->
       p.kill(strategy)
       ()
 
-pub fun only/run(
-  command: command,
-  // optional args
-  kill-strategy: kill-strategy = default
-  ): <io,async|e> ()
-  run(
-    command,
-    kill-strategy=kill-strategy,
-    action=fn(_) ()
-  )
+  // force process to be retained at least this long
+  // (but ignore UV_EBUSY if there are other references)
+  val _: uv-status-code = p.internal.close()
+  ()
+
+pub fun run-unit(command: command): <io,async|e> ()
+  run(command) fn(_) ()
+
+pub fun run-output(cmd: command): <async,io> string
+  cmd.with-output(capture-stdout).run fn(p) p.output
+
+pub fun run-outputs(cmd: command): <async,io> (string, string)
+  cmd.with-output(capture-outputs).run fn(p) p.outputs
+
+// TODO: add to core/maybe?
+fun foreach(m: maybe<a>, action: a -> e ()): e ()
+  match m
+    Just(x) -> action(x)
+    Nothing -> ()
 
 pub fun run(
   command: command,
-  action: (process) -> <io,async|e> a,
+  action: forall<s> (process<s>) -> <io,async|e> a,
   // optional args
   check-exit: bool = True,
   kill-strategy: kill-strategy = default
@@ -166,8 +190,9 @@ pub fun run(
   val uv-stdin = match command.input
     Ignore-input -> Stream-ignore
     Inherit-input -> Stream-fd(0.int32)
+    Stream-input(stream) -> Stream-uv(stream)
 
-  val (uv-stdout, uv-stderr) = match command.output
+  val ((uv-stdout, stdout-stream), (uv-stderr, stderr-stream)) = match command.output
     Split(out, err) ->
       (
         stdio-stream-of-output(out, 1.int32),
@@ -192,13 +217,17 @@ pub fun run(
     stdout = uv-stdout,
     stderr = uv-stderr
   )
-  val uv-process = spawn(uv-cmd, on-exit)
-  val process = Process(uv-process, exit-p)
+  val uv-process = spawn(uv-cmd, on-exit).untry
+  val process = Process(uv-process, exit-p, Output-streams(stdout-stream, stderr-stream))
   with finally
     // this finalizer will kill the process,
     // but only if it hasn't already ended
     // (which the success path will wait for)
     finalize-process(process, kill-strategy)
+
+  // close the half of any pipes that are only used by the child
+  close-owned(uv-stdout)
+  close-owned(uv-stderr)
 
   val result = action(process)
 
@@ -208,8 +237,45 @@ pub fun run(
     exit/check-exit(exit)
   result
 
-pub fun await(process: process): <io,async> exit
+fun close-owned(stream: stdio-stream): <io,async> ()
+  match stream
+    Stream-uv(s) -> s.close().untry
+    _ -> ()
+
+pub fun await(process: process<_>): <io,async> exit
   process.exit-p.await
 
-pub fun pid(process: process): <io-noexn> int
+pub fun pid(process: process<_>): <io-noexn> int
   process.internal.uv/process/pid.int
+
+fun require(v: maybe<io-stream>, desc: string): exn io-stream
+  match v
+    Just(v) -> v
+    Nothing -> throw("Process has no " ++ desc ++ " stream")
+
+pub fun output-stream(process: process<_>): exn io-stream
+  process.output-streams.stdout.require("stdout")
+
+pub fun stderr-stream(process: process<_>): exn io-stream
+  process.output-streams.stderr.require("stderr")
+
+pub fun output-bytes(process: process<_>): <io,async> bytes
+  process.output-stream.read-all()
+
+pub fun output(process: process<_>): <io,async> string
+  process.output-bytes.string
+
+pub fun stderr-output-bytes(process: process<_>): <io,async> bytes
+  process.stderr-stream.read-all()
+
+pub fun stderr-output(process: process<_>): <io,async> string
+  process.stderr-output-bytes.string
+
+pub fun outputs-bytes(process: process<_>): <io,async> (bytes, bytes)
+  val out = process.output-stream()
+  val err = process.stderr-stream()
+  interleaved({ out.read-all() }, { err.read-all() })
+
+pub fun outputs(process: process<_>): <io,async> (string, string)
+  val (out, err) = process.outputs-bytes
+  (out.string, err.string)
