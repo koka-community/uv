@@ -38,8 +38,7 @@ All operations with Koka callbacks (anything asynchronous), needs to store the c
 
 This library requires the following branches of the koka compiler, merged together:
 
-- [timbertson/uv-basics](https://github.com/koka-lang/koka/pull/852)
+- [TimWhiting/uv-basics](https://github.com/koka-lang/koka/pull/852)
   - core uv bindings - event loop & timers
-  - (based on TimWhiting/uv-basics)
 - [TimWhiting/bytes-prim](https://github.com/koka-lang/koka/pull/652)
   - raw bytes types
