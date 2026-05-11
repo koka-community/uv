@@ -1,6 +1,9 @@
 
 #include "kklib/box.h"
 
+// TODO: upstream into uv/core for all handle types?
+#define uv_fs_as_kk_any(fs) kk_uv_fs_as_any(uv_fs_as_kk(fs))
+
 // static kk_uv_fs__fstat kk_uv_stat_from_uv_stat(uv_stat_t* uvstat, kk_context_t* _ctx) {
 //   return kk_uv_fs__new_Fstat(
 //     kk_reuse_null,

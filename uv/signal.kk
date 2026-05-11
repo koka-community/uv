@@ -1,5 +1,8 @@
 import std/num/int32
 
+extern import
+  c file "inline/signal.h"
+
 pub val sig-int = sSIGINT()
 extern sSIGINT(): int32
   c inline "SIGINT"

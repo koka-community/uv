@@ -1,4 +1,5 @@
-pub import uv/utils
+pub import uv/core
+import uv/status-code
 import std/core-extras
 import std/num/int32
 

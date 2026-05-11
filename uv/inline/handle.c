@@ -1,7 +1,7 @@
 
 // general handler utilities
 
-static kk_uv_status_code_t kk_uv_handle_close_impl(kk_uv_utils__uv_handle handle, kk_context_t* _ctx) {
+static kk_uv_status_code_t kk_uv_handle_close_impl(kk_uv_core__uv_handle handle, kk_context_t* _ctx) {
   kk_uv_handle_t* uv_hnd = kk_uv_handle_unbox_borrowed(handle.internal, _ctx);
   // drop references held by the handle (e.g. callbacks)
   // TODO: if handle is not unique, the callbacks might still be required?
@@ -21,6 +21,6 @@ static kk_uv_status_code_t kk_uv_handle_close_impl(kk_uv_utils__uv_handle handle
   // } else {
     // kk_warning_message("Dropping last reference to handle of type %d\n", uv_hnd->uv.type);
   }
-  kk_uv_utils__uv_handle_drop(handle, _ctx);
+  kk_uv_core__uv_handle_drop(handle, _ctx);
   return kk_uv_status_code(status, _ctx);
 }
