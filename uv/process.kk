@@ -9,7 +9,7 @@
 // A Koka wrapper around the libuv process API
 module uv/process
 
-import uv/utils
+import uv/handle
 import uv/stream
 import uv/event-loop
 import std/num/int32

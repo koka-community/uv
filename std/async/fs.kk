@@ -1,6 +1,7 @@
 module std/async/fs
 
 import uv/fs
+import uv/status-code
 import std/os/env
 import std/os/path
 import std/async/async

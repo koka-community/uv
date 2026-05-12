@@ -7,6 +7,8 @@
 ---------------------------------------------------------------------------*/
 
 module uv/stream
+
+import uv/handle
 pub import std/core/bytes
 pub import uv/handle
 import uv/buffer

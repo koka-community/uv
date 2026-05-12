@@ -23,7 +23,7 @@ fun suite(): <async,test<<io,async>>> ()
   effectful-test("successful process")
     // TODO: use async process once that's stable
     expect(0) {
-      run-system("koka -e test/uv/embedded-event-loop.kk")
+      run-system("koka --verbose=0 -e test/uv/embedded-event-loop.kk")
     }
 
   // TODO: this doesn't fail, even though the above exit code is reported as 1

@@ -1,0 +1,30 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Koka
+        uses: koka-community/setup-koka@v1
+        with:
+          # this branch contains the `uv-basics` and `bytes-prim` branches from TimWhiting/koka
+          koka_repository: "timbertson/koka"
+          koka_ref: "uv-basics-and-bytes"
+          packages: "std"
+
+      - name: Run tests
+        run: |
+          koka --verbose=0 --console=ansi -e generated-tests.kk
